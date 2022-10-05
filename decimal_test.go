@@ -1,84 +1,83 @@
 package alpacadecimal_test
 
 import (
-	"database/sql/driver"
 	"testing"
 
 	"github.com/alpacahq/alpacadecimal"
-	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkDecimal(b *testing.B) {
-	d := decimal.NewFromInt(123)
+func TestDecimalValue(t *testing.T) {
 
-	var result driver.Value
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		result, _ = d.Value()
+	checkInt := func(source int64, expected string) {
+		d := alpacadecimal.NewFromInt(source)
+		v, err := d.Value()
+		require.NoError(t, err)
+		require.Equal(t, expected, v.(string))
 	}
-	_ = result
+
+	checkInt(0, "0")
+	checkInt(123, "123")
+	checkInt(-123, "-123")
+	checkInt(12345, "12345")
+	checkInt(-12345, "-12345")
+
+	checkFloat := func(source float64, expected string) {
+		d := alpacadecimal.NewFromFloat(source)
+		v, err := d.Value()
+		require.NoError(t, err)
+		require.Equal(t, expected, v.(string))
+	}
+
+	checkFloat(0.0, "0")
+	checkFloat(0.1, "0.1")
+	checkFloat(-0.1, "-0.1")
+	checkFloat(1.1, "1.1")
+	checkFloat(-1.1, "-1.1")
+	checkFloat(1.12, "1.12")
+	checkFloat(-1.12, "-1.12")
+	checkFloat(1000.12, "1000.12")
+	checkFloat(-1000.12, "-1000.12")
+	checkFloat(12345.123456789, "12345.123456789")
+	checkFloat(-12345.123456789, "-12345.123456789")
 }
 
-func BenchmarkAlpacaDecimalBestCase(b *testing.B) {
-	d := alpacadecimal.NewFromInt(123)
-
-	var result driver.Value
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		result, _ = d.Value()
+func TestDecimalScan(t *testing.T) {
+	check := func(source string) {
+		var d alpacadecimal.Decimal
+		err := d.Scan(source)
+		require.NoError(t, err)
+		require.Equal(t, source, d.String())
 	}
-	_ = result
+
+	check("0")
+	check("1")
+	check("10")
+	check("12")
+	check("-1234")
+	check("0.123")
+	check("1.234")
 }
 
-func BenchmarkAlpacaDecimalBetterCase(b *testing.B) {
-	d := alpacadecimal.NewFromInt(12346)
+func TestDecimalMul(t *testing.T) {
+	checkIntMul := func(a, b int64) {
+		d1 := alpacadecimal.NewFromInt(a)
+		d2 := alpacadecimal.NewFromInt(b)
+		d3 := alpacadecimal.NewFromInt(a * b)
 
-	var result driver.Value
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		result, _ = d.Value()
+		require.True(t, d1.Mul(d2).Equal(d3))
 	}
-	_ = result
-}
 
-func BenchmarkAlpacaDecimalRestCase(b *testing.B) {
-	d := alpacadecimal.NewFromDecimal(decimal.NewFromInt(123))
+	checkIntMul(1, 2)
+	checkIntMul(2, 3)
 
-	var result driver.Value
+	checkFloatMul := func(a, b float64, expected string) {
+		d1 := alpacadecimal.NewFromFloat(a)
+		d2 := alpacadecimal.NewFromFloat(b)
 
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		result, _ = d.Value()
+		require.Equal(t, expected, d1.Mul(d2).String())
 	}
-	_ = result
 
-}
-
-func BenchmarkAlpacaDecimalAdd(b *testing.B) {
-	d1 := alpacadecimal.NewFromInt(1)
-	d2 := alpacadecimal.NewFromInt(2)
-
-	var result alpacadecimal.Decimal
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		result = d1.Add(d2)
-	}
-	_ = result
-}
-
-func BenchmarkDecimalAdd(b *testing.B) {
-	d1 := decimal.NewFromInt(1)
-	d2 := decimal.NewFromInt(2)
-
-	var result decimal.Decimal
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		result = d1.Add(d2)
-	}
-	_ = result
+	checkFloatMul(1.1, 2.2, "2.42")
+	checkFloatMul(2.3, 0.3, "0.69")
 }
