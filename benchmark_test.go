@@ -110,8 +110,8 @@ func BenchmarkScan(b *testing.B) {
 }
 
 func BenchmarkMul(b *testing.B) {
-	x := 1.2345678
-	y := 2.34
+	x := 1.23
+	y := 2.0
 
 	b.Run("AlpacaDecimal", func(b *testing.B) {
 		d1 := alpacadecimal.NewFromFloat(x)

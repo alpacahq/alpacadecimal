@@ -12,17 +12,22 @@ https://alpaca.atlassian.net/wiki/spaces/ENG/pages/1752891395/Decimal+golang+pac
 ### Benchmark
 
 ```
-$ go test -bench=. --cpuprofile profile.out -memprofile memprofile.out
+$ make bench                
+go test -bench=. --cpuprofile profile.out --memprofile memprofile.out
 goos: darwin
 goarch: amd64
 pkg: github.com/alpacahq/alpacadecimal
 cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
-BenchmarkDecimal-16                      5347078               193.4 ns/op
-BenchmarkAlpacaDecimalBestCase-16       167308377                7.099 ns/op
-BenchmarkAlpacaDecimalBetterCase-16     18409668                67.17 ns/op
-BenchmarkAlpacaDecimalRestCase-16        5546788               204.7 ns/op
-BenchmarkAlpacaDecimalAdd-16            519596881                2.295 ns/op
-BenchmarkDecimalAdd-16                  15247545                74.09 ns/op
+BenchmarkValue/AlpacaDecimal_Cached_Case-16             358316202                3.337 ns/op
+BenchmarkValue/AlpacaDecimal_Optimized_Case-16          15720096                65.90 ns/op
+BenchmarkValue/AlpacaDecimal_Fallback_Case-16            5470454               193.6 ns/op
+BenchmarkValue/Decimal-16                                6017497               184.5 ns/op
+BenchmarkAdd/AlpacaDecimal-16                           511924670                2.162 ns/op
+BenchmarkAdd/Decimal-16                                 17032792                72.49 ns/op
+BenchmarkScan/AlpacaDecimal-16                          69441972                15.21 ns/op
+BenchmarkScan/Decimal-16                                 5307663               193.9 ns/op
+BenchmarkMul/AlpacaDecimal-16                           166523916                7.268 ns/op
+BenchmarkMul/Decimal-16                                 14445711                74.96 ns/op
 PASS
-ok      github.com/alpacahq/alpacadecimal       9.373s
+ok      github.com/alpacahq/alpacadecimal       14.879s
 ```
