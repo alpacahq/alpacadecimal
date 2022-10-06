@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/alpacahq/alpacadecimal"
+	ericdecimal "github.com/ericlagergren/decimal"
+	ericpostgres "github.com/ericlagergren/decimal/sql/postgres"
+
 	"github.com/shopspring/decimal"
 )
 
@@ -45,8 +48,21 @@ func BenchmarkValue(b *testing.B) {
 		_ = result
 	})
 
-	b.Run("Decimal", func(b *testing.B) {
+	b.Run("decimal.Decimal", func(b *testing.B) {
 		d := decimal.NewFromInt(123)
+
+		var result driver.Value
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.Value()
+		}
+		_ = result
+	})
+
+	b.Run("eric.Decimal", func(b *testing.B) {
+		v := ericdecimal.New(123, 0)
+		d := ericpostgres.Decimal{V: v}
 
 		var result driver.Value
 
@@ -72,7 +88,7 @@ func BenchmarkAdd(b *testing.B) {
 		_ = result
 	})
 
-	b.Run("Decimal", func(b *testing.B) {
+	b.Run("decimal.Decimal", func(b *testing.B) {
 		d1 := decimal.NewFromInt(1)
 		d2 := decimal.NewFromInt(2)
 
@@ -83,7 +99,19 @@ func BenchmarkAdd(b *testing.B) {
 			result = d1.Add(d2)
 		}
 		_ = result
+	})
 
+	b.Run("eric.Decimal", func(b *testing.B) {
+		d1 := ericdecimal.New(1, 0)
+		d2 := ericdecimal.New(2, 0)
+
+		result := ericdecimal.New(0, 0)
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result = result.Add(d1, d2)
+		}
+		_ = result
 	})
 }
 
@@ -99,10 +127,19 @@ func BenchmarkScan(b *testing.B) {
 		_ = err
 	})
 
-	b.Run("Decimal", func(b *testing.B) {
+	b.Run("decimal.Decimal", func(b *testing.B) {
 		var err error
 		for n := 0; n < b.N; n++ {
 			var d decimal.Decimal
+			err = d.Scan(source)
+		}
+		_ = err
+	})
+
+	b.Run("eric.Decimal", func(b *testing.B) {
+		var err error
+		for n := 0; n < b.N; n++ {
+			var d ericpostgres.Decimal
 			err = d.Scan(source)
 		}
 		_ = err
@@ -126,7 +163,7 @@ func BenchmarkMul(b *testing.B) {
 		_ = result
 	})
 
-	b.Run("Decimal", func(b *testing.B) {
+	b.Run("decimal.Decimal", func(b *testing.B) {
 		d1 := decimal.NewFromFloat(x)
 		d2 := decimal.NewFromFloat(y)
 
@@ -135,6 +172,20 @@ func BenchmarkMul(b *testing.B) {
 		b.ResetTimer()
 		for n := 0; n < b.N; n++ {
 			result = d1.Mul(d2)
+		}
+		_ = result
+
+	})
+
+	b.Run("eric.Decimal", func(b *testing.B) {
+		d1 := ericdecimal.New(123, 2)
+		d2 := ericdecimal.New(2, 0)
+
+		result := ericdecimal.New(0, 0)
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result = result.Mul(d1, d2)
 		}
 		_ = result
 

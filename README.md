@@ -12,22 +12,26 @@ https://alpaca.atlassian.net/wiki/spaces/ENG/pages/1752891395/Decimal+golang+pac
 ### Benchmark
 
 ```
-$ make bench                
+$ make bench
 go test -bench=. --cpuprofile profile.out --memprofile memprofile.out
 goos: darwin
 goarch: amd64
 pkg: github.com/alpacahq/alpacadecimal
 cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
-BenchmarkValue/AlpacaDecimal_Cached_Case-16             358316202                3.337 ns/op
-BenchmarkValue/AlpacaDecimal_Optimized_Case-16          15720096                65.90 ns/op
-BenchmarkValue/AlpacaDecimal_Fallback_Case-16            5470454               193.6 ns/op
-BenchmarkValue/Decimal-16                                6017497               184.5 ns/op
-BenchmarkAdd/AlpacaDecimal-16                           511924670                2.162 ns/op
-BenchmarkAdd/Decimal-16                                 17032792                72.49 ns/op
-BenchmarkScan/AlpacaDecimal-16                          69441972                15.21 ns/op
-BenchmarkScan/Decimal-16                                 5307663               193.9 ns/op
-BenchmarkMul/AlpacaDecimal-16                           166523916                7.268 ns/op
-BenchmarkMul/Decimal-16                                 14445711                74.96 ns/op
+BenchmarkValue/AlpacaDecimal_Cached_Case-16             355753014                3.382 ns/op
+BenchmarkValue/AlpacaDecimal_Optimized_Case-16          17469913                67.09 ns/op
+BenchmarkValue/AlpacaDecimal_Fallback_Case-16            5666762               203.0 ns/op
+BenchmarkValue/decimal.Decimal-16                        6021271               201.3 ns/op
+BenchmarkValue/eric.Decimal-16                           5783232               173.9 ns/op
+BenchmarkAdd/AlpacaDecimal-16                           523703056                2.221 ns/op
+BenchmarkAdd/decimal.Decimal-16                         15251074                74.35 ns/op
+BenchmarkAdd/eric.Decimal-16                            24815637                43.63 ns/op
+BenchmarkScan/AlpacaDecimal-16                          77938342                15.11 ns/op
+BenchmarkScan/decimal.Decimal-16                         5867258               194.6 ns/op
+BenchmarkScan/eric.Decimal-16                            5484034               188.7 ns/op
+BenchmarkMul/AlpacaDecimal-16                           162763900                7.288 ns/op
+BenchmarkMul/decimal.Decimal-16                         14980779                71.57 ns/op
+BenchmarkMul/eric.Decimal-16                            43237760                26.84 ns/op
 PASS
-ok      github.com/alpacahq/alpacadecimal       14.879s
+ok      github.com/alpacahq/alpacadecimal       22.036s
 ```
