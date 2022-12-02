@@ -260,6 +260,19 @@ func TestDecimal(t *testing.T) {
 	})
 
 	t.Run("Decimal.Copy", func(t *testing.T) {
+		{
+			var a alpacadecimal.Decimal
+			err := a.Scan("1")
+			require.NoError(t, err)
+			shouldEqual(t, a, one)
+
+			b := a.Copy()
+			err = b.Scan("2")
+			require.NoError(t, err)
+			shouldEqual(t, a, one)
+			shouldEqual(t, b, two)
+		}
+
 		requireCompatible(t, func(input string) (string, string) {
 			x := alpacadecimal.RequireFromString(input).Copy().String()
 			y := decimal.RequireFromString(input).Copy().String()

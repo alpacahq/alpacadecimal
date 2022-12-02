@@ -36,6 +36,7 @@ var pow10Table []int64 = []int64{
 //      `valueCache[200000] = "1000"`
 // this consumes about 9 MB in memory with pprof check.
 const cacheSize = 200001
+const cacheOffset = 100000
 
 var valueCache [cacheSize]driver.Value
 var stringCache [cacheSize]string
@@ -43,7 +44,7 @@ var stringCache [cacheSize]string
 func init() {
 	// init cache
 	for i := 0; i < cacheSize; i++ {
-		str := strconv.FormatFloat(float64(i-100000)/100, 'f', -1, 64)
+		str := strconv.FormatFloat(float64(i-cacheOffset)/100, 'f', -1, 64)
 
 		valueCache[i] = str
 		stringCache[i] = str
@@ -138,6 +139,7 @@ func NewFromFloat(f float64) Decimal {
 	picoInt64 := int64(picoFloat)
 
 	// check if it's within range and is whole number
+	// integer overflow is accounted for via the `picoFloat == float64(picoInt64)` check
 	if picoInt64 >= minIntInFixed && picoInt64 <= maxIntInFixed && picoFloat == float64(picoInt64) {
 		return Decimal{fixed: picoInt64}
 	}
@@ -344,10 +346,13 @@ func (d Decimal) CoefficientInt64() int64 {
 	return d.asFallback().CoefficientInt64()
 }
 
-// fallback:
+// optimized:
 // Copy returns a copy of decimal with the same value and exponent, but a different pointer to value.
 func (d Decimal) Copy() Decimal {
-	return newFromDecimal(d.asFallback().Copy())
+	if d.fallback == nil {
+		return Decimal{fixed: d.fixed}
+	}
+	return newFromDecimal(d.fallback.Copy())
 }
 
 // fallback:
@@ -796,7 +801,7 @@ func (d Decimal) String() string {
 	if d.fallback == nil {
 		// cache hit
 		if d.fixed <= a1000InFixed && d.fixed >= aNeg1000InFixed && d.fixed%aCentInFixed == 0 {
-			return stringCache[d.fixed/aCentInFixed+100000]
+			return stringCache[d.fixed/aCentInFixed+cacheOffset]
 		}
 
 		// "-9223372.000000000000" => max length = 21 bytes
@@ -960,7 +965,7 @@ func (d Decimal) Value() (driver.Value, error) {
 	if d.fallback == nil {
 		// cache hit
 		if d.fixed <= a1000InFixed && d.fixed >= aNeg1000InFixed && d.fixed%aCentInFixed == 0 {
-			return valueCache[d.fixed/aCentInFixed+100000], nil
+			return valueCache[d.fixed/aCentInFixed+cacheOffset], nil
 		}
 
 		return d.String(), nil
@@ -1266,6 +1271,8 @@ func div(x, y int64) (int64, bool) {
 	fz := float64(x) / float64(y)
 	z := int64(fz * scale)
 
+	// this `mul` check is to ensure we do not
+	// lose precision from previous float64 operations.
 	if xx, ok := mul(y, z); ok && x == xx {
 		return z, true
 	} else {
