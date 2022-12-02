@@ -48,7 +48,7 @@ correct / valid, just different). Affected APIs:
 - `Decimal.CoefficientInt64()` 
 - `Decimal.NumDigits()`
 
-For optimized case, `alpacadecimal.Decimal` always assume that exponent is 12, which result valid but different behaviour. For example,
+For optimized case, `alpacadecimal.Decimal` always assume that exponent is 12, which results in a valid but different decimal representation. For example,
 
 ```golang
 x := alpacadecimal.NewFromInt(123)

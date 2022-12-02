@@ -27,7 +27,7 @@ var pow10Table []int64 = []int64{
 	1e0, 1e1, 1e2, 1e3, 1e4,
 	1e5, 1e6, 1e7, 1e8, 1e9,
 	1e10, 1e11, 1e12, 1e13, 1e14,
-	1e15, 1e16,
+	1e15, 1e16, 1e17, 1e18,
 }
 
 // cache value from -1000.00 to 1000.00
@@ -115,10 +115,19 @@ func Min(first Decimal, rest ...Decimal) Decimal {
 // optimized:
 // New returns a new fixed-point decimal, value * 10 ^ exp.
 func New(value int64, exp int32) Decimal {
-	if exp >= -12 && exp <= 0 {
-		s := pow10Table[-exp]
-		if value >= minInt*s && value <= maxInt*s {
-			return Decimal{fixed: value * pow10Table[precision+exp]}
+	if exp >= -12 {
+		if exp <= 0 {
+			s := pow10Table[-exp]
+			if value >= minInt*s && value <= maxInt*s {
+				return Decimal{fixed: value * pow10Table[precision+exp]}
+			}
+		}
+		// when exp > 7, it would be greater than maxInt
+		if exp <= 6 {
+			s := pow10Table[exp]
+			if value >= minInt/s && value <= maxInt/s {
+				return Decimal{fixed: value * pow10Table[precision+exp]}
+			}
 		}
 	}
 	return newFromDecimal(decimal.New(value, exp))

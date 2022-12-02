@@ -85,14 +85,59 @@ func TestDecimal(t *testing.T) {
 	})
 
 	t.Run("New", func(t *testing.T) {
-		x := alpacadecimal.New(1_000_000_000_000, -12)
-		shouldEqual(t, x, one)
+		{
+			x := alpacadecimal.New(1, -13)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("0.0000000000001"))
+			require.False(t, x.IsOptimized())
+		}
 
-		y := alpacadecimal.New(1, -3)
-		shouldEqual(t, y, alpacadecimal.NewFromFloat(0.001))
+		{
+			x := alpacadecimal.New(1_000_000_000_000, -12)
+			shouldEqual(t, x, one)
+			require.True(t, x.IsOptimized())
+		}
 
-		z := alpacadecimal.New(3, 0)
-		shouldEqual(t, z, alpacadecimal.RequireFromString("3"))
+		{
+			x := alpacadecimal.New(1, -3)
+			shouldEqual(t, x, alpacadecimal.NewFromFloat(0.001))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(3, 0)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("3"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(3, 0)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("3"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(4, 1)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("40"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(5, 6)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("5000000"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(-9, 6)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("-9000000"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(1, 7)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("10000000"))
+			require.False(t, x.IsOptimized())
+		}
 	})
 
 	t.Run("NewFromBigInt", func(t *testing.T) {
