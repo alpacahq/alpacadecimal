@@ -7,6 +7,9 @@ clear-asm:
 	rm decimal.s
 	rm importcfg
 
+test:
+	go test .
+
 bench:
 	go test -bench=. --cpuprofile profile.out --memprofile memprofile.out
 
