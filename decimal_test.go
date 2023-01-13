@@ -202,9 +202,61 @@ func TestDecimal(t *testing.T) {
 	})
 
 	t.Run("NewFromString", func(t *testing.T) {
-		x, err := alpacadecimal.NewFromString("2")
-		require.NoError(t, err)
-		shouldEqual(t, x, two)
+		{
+			d, err := alpacadecimal.NewFromString("2")
+			require.NoError(t, err)
+			require.Equal(t, "2", d.String())
+			require.True(t, d.IsOptimized())
+
+			d2, err := decimal.NewFromString("2")
+			require.NoError(t, err)
+			require.Equal(t, "2", d2.String())
+		}
+
+		{
+			d, err := alpacadecimal.NewFromString("+2")
+			require.NoError(t, err)
+			require.Equal(t, "2", d.String())
+			require.True(t, d.IsOptimized())
+
+			d2, err := decimal.NewFromString("+2")
+			require.NoError(t, err)
+			require.Equal(t, "2", d2.String())
+		}
+
+		{
+			d, err := alpacadecimal.NewFromString("-22")
+			require.NoError(t, err)
+			require.Equal(t, "-22", d.String())
+			require.True(t, d.IsOptimized())
+
+			d2, err := decimal.NewFromString("-22")
+			require.NoError(t, err)
+			require.Equal(t, "-22", d2.String())
+
+		}
+
+		{
+			d, err := alpacadecimal.NewFromString(".123")
+			require.NoError(t, err)
+			require.Equal(t, "0.123", d.String())
+			require.True(t, d.IsOptimized())
+
+			d2, err := decimal.NewFromString(".123")
+			require.NoError(t, err)
+			require.Equal(t, "0.123", d2.String())
+		}
+
+		{
+			d, err := alpacadecimal.NewFromString("-.123")
+			require.NoError(t, err)
+			require.Equal(t, "-0.123", d.String())
+			require.True(t, d.IsOptimized())
+
+			d2, err := decimal.NewFromString("-.123")
+			require.NoError(t, err)
+			require.Equal(t, "-0.123", d2.String())
+		}
 	})
 
 	t.Run("RequireFromString", func(t *testing.T) {
@@ -739,6 +791,27 @@ func TestDecimal(t *testing.T) {
 				return x, y
 			})
 		}
+
+		require.Equal(t, "2", alpacadecimal.RequireFromString("1.5").Round(0).String())
+		require.Equal(t, "2", decimal.RequireFromString("1.5").Round(0).String())
+
+		require.Equal(t, "1.2", alpacadecimal.RequireFromString("1.23456").Round(1).String())
+		require.Equal(t, "1.2", decimal.RequireFromString("1.23456").Round(1).String())
+
+		require.Equal(t, "-1.23", alpacadecimal.RequireFromString("-1.23456").Round(2).String())
+		require.Equal(t, "-1.23", decimal.RequireFromString("-1.23456").Round(2).String())
+
+		require.Equal(t, "-1.235", alpacadecimal.RequireFromString("-1.23456").Round(3).String())
+		require.Equal(t, "-1.235", decimal.RequireFromString("-1.23456").Round(3).String())
+
+		require.Equal(t, "-1.2346", alpacadecimal.RequireFromString("-1.23456").Round(4).String())
+		require.Equal(t, "-1.2346", decimal.RequireFromString("-1.23456").Round(4).String())
+
+		require.Equal(t, "-1.23456", alpacadecimal.RequireFromString("-1.23456").Round(5).String())
+		require.Equal(t, "-1.23456", decimal.RequireFromString("-1.23456").Round(5).String())
+
+		require.Equal(t, "-1.23456", alpacadecimal.RequireFromString("-1.23456").Round(6).String())
+		require.Equal(t, "-1.23456", decimal.RequireFromString("-1.23456").Round(6).String())
 	})
 
 	t.Run("Decimal.RoundBank", func(t *testing.T) {
