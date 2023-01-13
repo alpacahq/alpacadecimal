@@ -31,9 +31,12 @@ var pow10Table []int64 = []int64{
 }
 
 // cache value from -1000.00 to 1000.00
-// with `valueCache[0] = "-1000"`
-//      `valueCache[100000] = "0"`
-//      `valueCache[200000] = "1000"`
+// with
+//
+//	`valueCache[0] = "-1000"`
+//	`valueCache[100000] = "0"`
+//	`valueCache[200000] = "1000"`
+//
 // this consumes about 9 MB in memory with pprof check.
 const cacheSize = 200001
 const cacheOffset = 100000
@@ -177,8 +180,7 @@ func NewFromFloat32(f float32) Decimal {
 //
 // Example:
 //
-//     NewFromFloatWithExponent(123.456, -2).String() // output: "123.46"
-//
+//	NewFromFloatWithExponent(123.456, -2).String() // output: "123.46"
 func NewFromFloatWithExponent(value float64, exp int32) Decimal {
 	return newFromDecimal(decimal.NewFromFloatWithExponent(value, exp))
 }
@@ -319,10 +321,9 @@ func (d Decimal) Ceil() Decimal {
 // optimized:
 // Cmp compares the numbers represented by d and d2 and returns:
 //
-//     -1 if d <  d2
-//      0 if d == d2
-//     +1 if d >  d2
-//
+//	-1 if d <  d2
+//	 0 if d == d2
+//	+1 if d >  d2
 func (d Decimal) Cmp(d2 Decimal) int {
 	if d.fallback == nil && d2.fallback == nil {
 		switch {
@@ -460,13 +461,11 @@ func (d Decimal) Floor() Decimal {
 }
 
 // fallback: (can be optimized if needed)
-//
 func (d *Decimal) GobDecode(data []byte) error {
 	return d.UnmarshalBinary(data)
 }
 
 // fallback: (can be optimized if needed)
-//
 func (d Decimal) GobEncode() ([]byte, error) {
 	return d.MarshalBinary()
 }
@@ -643,10 +642,38 @@ func (d Decimal) Rat() *big.Rat {
 	return d.asFallback().Rat()
 }
 
-// fallback:
+// optimized:
 // Round rounds the decimal to places decimal places.
 // If places < 0, it will round the integer part to the nearest 10^(-places).
 func (d Decimal) Round(places int32) Decimal {
+	if d.fallback == nil {
+		if places >= precision {
+			// no need to round
+			return d
+		}
+		if places >= 0 {
+			s := pow10Table[precision-places]
+			m := d.fixed % s
+			if m == 0 {
+				// no need to round
+				return d
+			}
+
+			if m > 0 {
+				if m*2 >= s {
+					return Decimal{fixed: d.fixed - m + s}
+				} else {
+					return Decimal{fixed: d.fixed - m}
+				}
+			} else {
+				if -m*2 >= s {
+					return Decimal{fixed: d.fixed - m - s}
+				} else {
+					return Decimal{fixed: d.fixed - m}
+				}
+			}
+		}
+	}
 	return newFromDecimal(d.asFallback().Round(places))
 }
 
@@ -665,13 +692,14 @@ func (d Decimal) RoundBank(places int32) Decimal {
 // interval. The amount payable for a cash transaction is rounded to the nearest
 // multiple of the minimum currency unit available. The following intervals are
 // available: 5, 10, 25, 50 and 100; any other number throws a panic.
-//	    5:   5 cent rounding 3.43 => 3.45
-// 	   10:  10 cent rounding 3.45 => 3.50 (5 gets rounded up)
-// 	   25:  25 cent rounding 3.41 => 3.50
-// 	   50:  50 cent rounding 3.75 => 4.00
-// 	  100: 100 cent rounding 3.50 => 4.00
-// For more details: https://en.wikipedia.org/wiki/Cash_rounding
 //
+//	  5:   5 cent rounding 3.43 => 3.45
+//	 10:  10 cent rounding 3.45 => 3.50 (5 gets rounded up)
+//	 25:  25 cent rounding 3.41 => 3.50
+//	 50:  50 cent rounding 3.75 => 4.00
+//	100: 100 cent rounding 3.50 => 4.00
+//
+// For more details: https://en.wikipedia.org/wiki/Cash_rounding
 func (d Decimal) RoundCash(interval uint8) Decimal {
 	return newFromDecimal(d.asFallback().RoundCash(interval))
 }
@@ -681,11 +709,10 @@ func (d Decimal) RoundCash(interval uint8) Decimal {
 //
 // Example:
 //
-//     NewFromFloat(545).RoundCeil(-2).String()   // output: "600"
-//     NewFromFloat(500).RoundCeil(-2).String()   // output: "500"
-//     NewFromFloat(1.1001).RoundCeil(2).String() // output: "1.11"
-//     NewFromFloat(-1.454).RoundCeil(1).String() // output: "-1.5"
-//
+//	NewFromFloat(545).RoundCeil(-2).String()   // output: "600"
+//	NewFromFloat(500).RoundCeil(-2).String()   // output: "500"
+//	NewFromFloat(1.1001).RoundCeil(2).String() // output: "1.11"
+//	NewFromFloat(-1.454).RoundCeil(1).String() // output: "-1.5"
 func (d Decimal) RoundCeil(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundCeil(places))
 }
@@ -695,11 +722,10 @@ func (d Decimal) RoundCeil(places int32) Decimal {
 //
 // Example:
 //
-//     NewFromFloat(545).RoundDown(-2).String()   // output: "500"
-//     NewFromFloat(-500).RoundDown(-2).String()   // output: "-500"
-//     NewFromFloat(1.1001).RoundDown(2).String() // output: "1.1"
-//     NewFromFloat(-1.454).RoundDown(1).String() // output: "-1.5"
-//
+//	NewFromFloat(545).RoundDown(-2).String()   // output: "500"
+//	NewFromFloat(-500).RoundDown(-2).String()   // output: "-500"
+//	NewFromFloat(1.1001).RoundDown(2).String() // output: "1.1"
+//	NewFromFloat(-1.454).RoundDown(1).String() // output: "-1.5"
 func (d Decimal) RoundDown(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundDown(places))
 }
@@ -709,11 +735,10 @@ func (d Decimal) RoundDown(places int32) Decimal {
 //
 // Example:
 //
-//     NewFromFloat(545).RoundFloor(-2).String()   // output: "500"
-//     NewFromFloat(-500).RoundFloor(-2).String()   // output: "-500"
-//     NewFromFloat(1.1001).RoundFloor(2).String() // output: "1.1"
-//     NewFromFloat(-1.454).RoundFloor(1).String() // output: "-1.4"
-//
+//	NewFromFloat(545).RoundFloor(-2).String()   // output: "500"
+//	NewFromFloat(-500).RoundFloor(-2).String()   // output: "-500"
+//	NewFromFloat(1.1001).RoundFloor(2).String() // output: "1.1"
+//	NewFromFloat(-1.454).RoundFloor(1).String() // output: "-1.4"
 func (d Decimal) RoundFloor(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundFloor(places))
 }
@@ -723,11 +748,10 @@ func (d Decimal) RoundFloor(places int32) Decimal {
 //
 // Example:
 //
-//     NewFromFloat(545).RoundUp(-2).String()   // output: "600"
-//     NewFromFloat(500).RoundUp(-2).String()   // output: "500"
-//     NewFromFloat(1.1001).RoundUp(2).String() // output: "1.11"
-//     NewFromFloat(-1.454).RoundUp(1).String() // output: "-1.4"
-//
+//	NewFromFloat(545).RoundUp(-2).String()   // output: "600"
+//	NewFromFloat(500).RoundUp(-2).String()   // output: "500"
+//	NewFromFloat(1.1001).RoundUp(2).String() // output: "1.11"
+//	NewFromFloat(-1.454).RoundUp(1).String() // output: "-1.4"
 func (d Decimal) RoundUp(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundUp(places))
 }
@@ -783,7 +807,6 @@ func (d Decimal) Shift(shift int32) Decimal {
 //	-1 if d <  0
 //	 0 if d == 0
 //	+1 if d >  0
-//
 func (d Decimal) Sign() int {
 	if d.fallback == nil {
 		if d.fixed > 0 {
@@ -1068,9 +1091,7 @@ func (d NullDecimal) Value() (driver.Value, error) {
 	return d.Decimal.Value()
 }
 
-//
 // internal implementation
-//
 func newFromDecimal(d decimal.Decimal) Decimal {
 	return Decimal{fallback: &d}
 }
@@ -1110,12 +1131,11 @@ func parseFixed[T string | []byte](v T) (int64, bool) {
 	if len(v) > 1 {
 		switch v[0] {
 		case '+':
-			v = v[:len(v)-1]
+			v = v[1:]
 		case '-':
-			v = v[:len(v)-1]
+			v = v[1:]
 			negative = true
 		}
-
 	}
 
 	if len(v) == 0 {
