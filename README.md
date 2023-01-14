@@ -79,35 +79,32 @@ goos: darwin
 goarch: amd64
 pkg: github.com/alpacahq/alpacadecimal
 cpu: Intel(R) Core(TM) i9-9880H CPU @ 2.30GHz
-BenchmarkValue/alpacadecimal.Decimal_Cached_Case-16             336750202                3.687 ns/op
-BenchmarkValue/alpacadecimal.Decimal_Optimized_Case-16          14973528                74.76 ns/op
-BenchmarkValue/alpacadecimal.Decimal_Fallback_Case-16            5258898               232.7 ns/op
-BenchmarkValue/decimal.Decimal-16                                5769552               202.2 ns/op
-BenchmarkValue/eric.Decimal-16                                   6294133               182.0 ns/op
-
-BenchmarkAdd/alpacadecimal.Decimal-16                           514034338                2.362 ns/op
-BenchmarkAdd/decimal.Decimal-16                                 15149514                74.97 ns/op
-BenchmarkAdd/eric.Decimal-16                                    24288189                44.76 ns/op
-
-BenchmarkSub/alpacadecimal.Decimal-16                           242750554                5.179 ns/op
-BenchmarkSub/decimal.Decimal-16                                 19062336                60.58 ns/op
-BenchmarkSub/eric.Decimal-16                                    24667969                46.34 ns/op
-
-BenchmarkScan/alpacadecimal.Decimal-16                          77829289                16.21 ns/op
-BenchmarkScan/decimal.Decimal-16                                 5272404               203.6 ns/op
-BenchmarkScan/eric.Decimal-16                                    6435286               182.5 ns/op
-
-BenchmarkMul/alpacadecimal.Decimal-16                           151763162                7.943 ns/op
-BenchmarkMul/decimal.Decimal-16                                 15458967                68.01 ns/op
-BenchmarkMul/eric.Decimal-16                                    37150664                27.99 ns/op
-
-BenchmarkDiv/alpacadecimal.Decimal-16                           138624043                8.418 ns/op
-BenchmarkDiv/decimal.Decimal-16                                  4009129               285.0 ns/op
-BenchmarkDiv/eric.Decimal-16                                    35730601                32.89 ns/op
-
-BenchmarkString/alpacadecimal.Decimal-16                        355172980                3.346 ns/op
-BenchmarkString/decimal.Decimal-16                               6924613               165.4 ns/op
-BenchmarkString/eric.Decimal-16                                  6880526               170.6 ns/op
+BenchmarkValue/alpacadecimal.Decimal_Cached_Case-16             314870084                3.498 ns/op
+BenchmarkValue/alpacadecimal.Decimal_Optimized_Case-16          15383466                70.27 ns/op
+BenchmarkValue/alpacadecimal.Decimal_Fallback_Case-16            5603755               209.2 ns/op
+BenchmarkValue/decimal.Decimal-16                                6167956               184.5 ns/op
+BenchmarkValue/eric.Decimal-16                                   7021383               162.2 ns/op
+BenchmarkAdd/alpacadecimal.Decimal-16                           556380649                2.132 ns/op
+BenchmarkAdd/decimal.Decimal-16                                 15557970                68.31 ns/op
+BenchmarkAdd/eric.Decimal-16                                    27423730                40.34 ns/op
+BenchmarkSub/alpacadecimal.Decimal-16                           268269063                4.410 ns/op
+BenchmarkSub/decimal.Decimal-16                                 17239782                59.17 ns/op
+BenchmarkSub/eric.Decimal-16                                    24690660                40.81 ns/op
+BenchmarkScan/alpacadecimal.Decimal-16                          87226915                13.46 ns/op
+BenchmarkScan/decimal.Decimal-16                                 6075110               191.1 ns/op
+BenchmarkScan/eric.Decimal-16                                    6422792               174.4 ns/op
+BenchmarkMul/alpacadecimal.Decimal-16                           168732728                7.176 ns/op
+BenchmarkMul/decimal.Decimal-16                                 16051546                66.57 ns/op
+BenchmarkMul/eric.Decimal-16                                    39927952                28.20 ns/op
+BenchmarkDiv/alpacadecimal.Decimal-16                           152054401                7.772 ns/op
+BenchmarkDiv/decimal.Decimal-16                                  4098888               281.7 ns/op
+BenchmarkDiv/eric.Decimal-16                                    34245668                31.42 ns/op
+BenchmarkString/alpacadecimal.Decimal-16                        385985688                3.032 ns/op
+BenchmarkString/decimal.Decimal-16                               7750777               150.9 ns/op
+BenchmarkString/eric.Decimal-16                                  6694531               167.0 ns/op
+BenchmarkRound/alpacadecimal.Decimal-16                         88814521                11.92 ns/op
+BenchmarkRound/decimal.Decimal-16                                4333029               255.7 ns/op
+BenchmarkRound/eric.Decimal-16                                  55717095                21.34 ns/op
 PASS
-ok      github.com/alpacahq/alpacadecimal       35.016s
+ok      github.com/alpacahq/alpacadecimal       37.671s
 ```

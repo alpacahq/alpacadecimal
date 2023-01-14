@@ -319,3 +319,44 @@ func BenchmarkString(b *testing.B) {
 		_ = result
 	})
 }
+
+func BenchmarkRound(b *testing.B) {
+	x := 1.23456
+
+	b.Run("alpacadecimal.Decimal", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(x)
+
+		var result alpacadecimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result = d1.Round(2)
+		}
+		_ = result
+	})
+
+	b.Run("decimal.Decimal", func(b *testing.B) {
+		d1 := decimal.NewFromFloat(x)
+
+		var result decimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result = d1.Round(2)
+		}
+		_ = result
+
+	})
+
+	b.Run("eric.Decimal", func(b *testing.B) {
+		d1 := ericdecimal.New(123456, 5)
+
+		var result *ericdecimal.Big
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result = d1.Round(2)
+		}
+		_ = result
+	})
+}
