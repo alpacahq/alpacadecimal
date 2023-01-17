@@ -1,9 +1,9 @@
 # alpacadecimal
-Similar and compatible with decimal.Decimal, but optimized for Alpaca's data sets.
+Similar and compatible with [decimal.Decimal](https://pkg.go.dev/github.com/shopspring/decimal), but optimized for Alpaca's data sets.
 
 ### Goal
 - optimize for Alpaca data sets (99% of decimals are within 10 millions with up to 12 precisions).
-- compatible with `decimal.Decimal` so that it could be a drop-in replacement for current `decimal.Decimal` usage.
+- compatible with [decimal.Decimal](https://pkg.go.dev/github.com/shopspring/decimal) so that it could be a drop-in replacement for current `decimal.Decimal` usage.
 
 ### Key Ideas
 
