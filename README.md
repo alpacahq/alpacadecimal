@@ -30,7 +30,7 @@ type Decimal struct {
 }
 ```
 
-We pick 12 precisions because it could cover 99% of Alpaca common cases as indicated in design doc.
+We pick 12 precisions because it could cover 99% of Alpaca common cases.
 
 
 ### Compatibility
