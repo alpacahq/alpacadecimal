@@ -5,14 +5,12 @@ Similar and compatible with decimal.Decimal, but optimized for Alpaca's data set
 - optimize for Alpaca data sets.
 - compatible with `decimal.Decimal` so that it could be a drop-in replacement for current `decimal.Decimal` usage.
 
-### Design Doc
-
-https://alpaca.atlassian.net/wiki/spaces/ENG/pages/1752891395/Decimal+golang+package+for+Alpaca+Data+Sets
-
 ### Key Ideas
 
 The original `decimal.Decimal` package has bottleneck on `big.Int` operations, e.g. sql serialization / deserialization, addition, multiplication etc. These operations took fair amount cpu and memory during
 our profiling / monitoring.
+
+![profiling result](doc/value-slowness.png)
 
 The optimization this library is to represent most decimal numbers with `int64` instead of `big.Int`. To 
 keep this library to be compatible with original `decimal.Decimal` package, we use original as a fallback
