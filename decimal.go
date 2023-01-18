@@ -41,7 +41,6 @@ var pow10Table []int64 = []int64{
 const cacheSize = 200001
 const cacheOffset = 100000
 
-var valueCache [cacheSize]driver.Value
 var stringCache [cacheSize]string
 
 func init() {
@@ -49,7 +48,6 @@ func init() {
 	for i := 0; i < cacheSize; i++ {
 		str := strconv.FormatFloat(float64(i-cacheOffset)/100, 'f', -1, 64)
 
-		valueCache[i] = str
 		stringCache[i] = str
 	}
 }
@@ -997,7 +995,7 @@ func (d Decimal) Value() (driver.Value, error) {
 	if d.fallback == nil {
 		// cache hit
 		if d.fixed <= a1000InFixed && d.fixed >= aNeg1000InFixed && d.fixed%aCentInFixed == 0 {
-			return valueCache[d.fixed/aCentInFixed+cacheOffset], nil
+			return stringCache[d.fixed/aCentInFixed+cacheOffset], nil
 		}
 
 		return d.String(), nil
@@ -1081,7 +1079,6 @@ func (d *NullDecimal) UnmarshalText(text []byte) error {
 
 	d.Valid = true
 	return nil
-
 }
 
 func (d NullDecimal) Value() (driver.Value, error) {
