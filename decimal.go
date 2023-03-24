@@ -13,15 +13,17 @@ import (
 // currently support 12 precision, this is tunnable,
 // more precision => smaller maxInt
 // less precision => bigger maxInt
-const precision = 12
-const scale = 1e12
-const maxInt int64 = int64(math.MaxInt64) / scale
-const minInt int64 = int64(math.MinInt64) / scale
-const maxIntInFixed int64 = maxInt * scale
-const minIntInFixed int64 = minInt * scale
-const a1000InFixed int64 = 1000 * scale
-const aNeg1000InFixed int64 = -1000 * scale
-const aCentInFixed int64 = scale / 100
+var (
+	precision       int32 = 12
+	scale           int64 = 1e12
+	maxInt          int64 = int64(math.MaxInt64) / scale
+	minInt          int64 = int64(math.MinInt64) / scale
+	maxIntInFixed   int64 = maxInt * scale
+	minIntInFixed   int64 = minInt * scale
+	a1000InFixed    int64 = 1000 * scale
+	aNeg1000InFixed int64 = -1000 * scale
+	aCentInFixed    int64 = scale / 100
+)
 
 var pow10Table []int64 = []int64{
 	1e0, 1e1, 1e2, 1e3, 1e4,
@@ -52,6 +54,18 @@ func init() {
 		valueCache[i] = str
 		stringCache[i] = str
 	}
+}
+
+func ChangeMaxPrecision(newPrecision int) {
+	precision = int32(newPrecision)
+	scale = int64(math.Pow10(newPrecision))
+	maxInt = int64(math.MaxInt64) / scale
+	minInt = int64(math.MinInt64) / scale
+	maxIntInFixed = maxInt * scale
+	minIntInFixed = minInt * scale
+	a1000InFixed = 1000 * scale
+	aNeg1000InFixed = -1000 * scale
+	aCentInFixed = scale / 100
 }
 
 // API
@@ -118,7 +132,7 @@ func Min(first Decimal, rest ...Decimal) Decimal {
 // optimized:
 // New returns a new fixed-point decimal, value * 10 ^ exp.
 func New(value int64, exp int32) Decimal {
-	if exp >= -12 {
+	if exp >= -precision {
 		if exp <= 0 {
 			s := pow10Table[-exp]
 			if value >= minInt*s && value <= maxInt*s {
@@ -838,8 +852,9 @@ func (d Decimal) String() string {
 
 		// "-9223372.000000000000" => max length = 21 bytes
 		var s [21]byte
-		start := 7
-		end := 8
+		dotStart := int(int32(20) - precision)
+		start := dotStart - 1
+		end := dotStart
 
 		var ufixed uint64
 		if d.fixed >= 0 {
@@ -848,8 +863,8 @@ func (d Decimal) String() string {
 			ufixed = uint64(d.fixed * -1)
 		}
 
-		integerPart := ufixed / scale
-		fractionalPart := ufixed % scale
+		integerPart := ufixed / uint64(scale)
+		fractionalPart := ufixed % uint64(scale)
 
 		// integer part
 		if integerPart == 0 {
@@ -865,14 +880,14 @@ func (d Decimal) String() string {
 
 		// fractional part
 		if fractionalPart > 0 {
-			s[8] = '.'
-			for i := 20; i > 8; i-- {
+			s[dotStart] = '.'
+			for i := 20; i > dotStart; i-- {
 				is := fractionalPart % 10
 				fractionalPart /= 10
 				if is != 0 {
 					s[i] = byte(is + '0')
 					end = i + 1
-					for j := i - 1; j > 8; j-- {
+					for j := i - 1; j > dotStart; j-- {
 						s[j] = byte(fractionalPart%10 + '0')
 						fractionalPart /= 10
 					}
@@ -934,12 +949,12 @@ func (d Decimal) Tan() Decimal {
 
 // optimized:
 // Truncate truncates off digits from the number, without rounding.
-func (d Decimal) Truncate(precision int32) Decimal {
+func (d Decimal) Truncate(wantPrecision int32) Decimal {
 	if d.fallback == nil {
-		s := pow10Table[12-precision]
+		s := pow10Table[precision-wantPrecision]
 		return Decimal{fixed: d.fixed / s * s}
 	}
-	return newFromDecimal(d.asFallback().Truncate(precision))
+	return newFromDecimal(d.asFallback().Truncate(wantPrecision))
 }
 
 // fallback:
@@ -1155,7 +1170,7 @@ func parseFixed[T string | []byte](v T) (int64, bool) {
 		} else if c == '.' {
 			// handle fractional part
 			s := v[i+1:]
-			if len(s) > 12 {
+			if int32(len(s)) > precision {
 				// out of range
 				return 0, false
 			}
@@ -1168,7 +1183,7 @@ func parseFixed[T string | []byte](v T) (int64, bool) {
 					return 0, false
 				}
 			}
-			fixed *= pow10Table[12-len(s)]
+			fixed *= pow10Table[precision-int32(len(s))]
 			if negative {
 				return -fixed, true
 			} else {
@@ -1190,7 +1205,7 @@ func parseFixed[T string | []byte](v T) (int64, bool) {
 func (d Decimal) asFallback() decimal.Decimal {
 	if d.fallback == nil {
 		x := big.NewInt(d.fixed)
-		return decimal.NewFromBigInt(x, -12)
+		return decimal.NewFromBigInt(x, -precision)
 	}
 	return *d.fallback
 }
@@ -1298,7 +1313,7 @@ func div(x, y int64) (int64, bool) {
 	}
 
 	fz := float64(x) / float64(y)
-	z := int64(fz * scale)
+	z := int64(fz * float64(scale))
 
 	// this `mul` check is to ensure we do not
 	// lose precision from previous float64 operations.
