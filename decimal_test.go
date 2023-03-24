@@ -55,34 +55,11 @@ func requireCompatible2[T any](t *testing.T, f func(input1, input2 string) (x, y
 }
 
 func TestDecimal(t *testing.T) {
+	// alpacadecimal.ChangeMaxPrecision(12)
+
 	one := alpacadecimal.NewFromInt(1)
-	two := alpacadecimal.NewFromInt(2)
-	three := alpacadecimal.NewFromInt(3)
 
-	t.Run("Zero", func(t *testing.T) {
-		require.Equal(t, "0", alpacadecimal.Zero.String())
-		require.True(t, alpacadecimal.Zero.Equal(alpacadecimal.Zero))
-		require.True(t, alpacadecimal.Zero.GreaterThan(alpacadecimal.NewFromInt(-1)))
-		require.True(t, alpacadecimal.Zero.LessThan(alpacadecimal.NewFromInt(1)))
-	})
-
-	t.Run("RescalePair", func(t *testing.T) {
-		d1, d2 := alpacadecimal.RescalePair(one, two)
-		shouldEqual(t, d1, one)
-		shouldEqual(t, d2, two)
-	})
-
-	t.Run("Avg", func(t *testing.T) {
-		shouldEqual(t, alpacadecimal.Avg(one, two, three), two)
-	})
-
-	t.Run("Max", func(t *testing.T) {
-		require.True(t, alpacadecimal.Max(one, two, three).Equal(three))
-	})
-
-	t.Run("Min", func(t *testing.T) {
-		require.True(t, alpacadecimal.Min(one, two, three).Equal(one))
-	})
+	commontFunctionTest(t)
 
 	t.Run("New", func(t *testing.T) {
 		{
@@ -138,6 +115,211 @@ func TestDecimal(t *testing.T) {
 			shouldEqual(t, x, alpacadecimal.RequireFromString("10000000"))
 			require.False(t, x.IsOptimized())
 		}
+	})
+
+	t.Run("Decimal.GetFixed", func(t *testing.T) {
+		x := alpacadecimal.NewFromInt(123)
+		require.Equal(t, int64(123_000_000_000_000), x.GetFixed())
+
+		y := alpacadecimal.NewFromInt(1234567890)
+		require.Equal(t, int64(0), y.GetFixed())
+	})
+
+	t.Run("Decimal.GetFallback", func(t *testing.T) {
+		x := alpacadecimal.NewFromInt(123)
+		require.Nil(t, x.GetFallback())
+
+		y := alpacadecimal.NewFromInt(1234567890)
+		require.NotNil(t, y.GetFallback())
+		require.Equal(t, "1234567890", y.GetFallback().String())
+	})
+
+	t.Run("Decimal.IsOptimized", func(t *testing.T) {
+		x := alpacadecimal.NewFromInt(123)
+		require.True(t, x.IsOptimized())
+
+		y := alpacadecimal.NewFromInt(1234567890)
+		require.False(t, y.IsOptimized())
+	})
+
+	t.Run("Decimal.Exponent", func(t *testing.T) {
+		require.Equal(t, int32(-12), alpacadecimal.RequireFromString("1").Exponent())
+	})
+
+	t.Run("Decimal.Truncate", func(t *testing.T) {
+		x := alpacadecimal.NewFromFloat(1.234)
+		require.Equal(t, "1", x.Truncate(0).String())
+		require.Equal(t, "1.2", x.Truncate(1).String())
+		require.Equal(t, "1.23", x.Truncate(2).String())
+		require.Equal(t, "1.234", x.Truncate(3).String())
+		require.Equal(t, "1.234", x.Truncate(4).String())
+
+		y := alpacadecimal.NewFromFloat(-1.234)
+		require.Equal(t, "-1", y.Truncate(0).String())
+		require.Equal(t, "-1.2", y.Truncate(1).String())
+		require.Equal(t, "-1.23", y.Truncate(2).String())
+		require.Equal(t, "-1.234", y.Truncate(3).String())
+		require.Equal(t, "-1.234", y.Truncate(4).String())
+
+		for i := int32(0); i < 10; i++ {
+			requireCompatible(t, func(input string) (string, string) {
+				x := alpacadecimal.RequireFromString(input).Truncate(i).String()
+				y := decimal.RequireFromString(input).Truncate(i).String()
+				return x, y
+			})
+		}
+	})
+}
+
+func TestChangePrecission(t *testing.T) {
+	alpacadecimal.ChangeMaxPrecision(6)
+
+	x := alpacadecimal.NewFromInt(123)
+	require.Equal(t, int32(-6), x.Exponent())
+	require.Equal(t, "123000000", x.Coefficient().String())
+	require.Equal(t, int64(123000000), x.CoefficientInt64())
+	require.Equal(t, 9, x.NumDigits())
+
+	y := decimal.NewFromInt(123)
+	require.Equal(t, int32(0), y.Exponent())
+	require.Equal(t, "123", y.Coefficient().String())
+	require.Equal(t, int64(123), y.CoefficientInt64())
+	require.Equal(t, 3, y.NumDigits())
+
+	commontFunctionTest(t)
+
+	one := alpacadecimal.NewFromInt(1)
+
+	t.Run("New", func(t *testing.T) {
+		{
+			x := alpacadecimal.New(1, -7)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("0.0000001"))
+			require.False(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(1_000_000, -6)
+			shouldEqual(t, x, one)
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(1, -3)
+			shouldEqual(t, x, alpacadecimal.NewFromFloat(0.001))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(3, 0)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("3"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(3, 0)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("3"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(4, 1)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("40"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(5, 6)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("5000000"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(-9, 6)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("-9000000"))
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(1, 7)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("10000000"))
+			require.False(t, x.IsOptimized())
+		}
+	})
+
+	t.Run("Decimal.GetFixed", func(t *testing.T) {
+		x := alpacadecimal.NewFromInt(123)
+		require.Equal(t, int64(123_000_000), x.GetFixed())
+
+		y := alpacadecimal.NewFromInt(10_000_000_000_000)
+		require.Equal(t, int64(0), y.GetFixed())
+	})
+
+	t.Run("Decimal.GetFallback", func(t *testing.T) {
+		x := alpacadecimal.NewFromInt(123)
+		require.Nil(t, x.GetFallback())
+
+		y := alpacadecimal.NewFromInt(10_000_000_000_000)
+		require.NotNil(t, y.GetFallback())
+		require.Equal(t, "10000000000000", y.GetFallback().String())
+	})
+
+	t.Run("Decimal.IsOptimized", func(t *testing.T) {
+		x := alpacadecimal.NewFromInt(123)
+		require.True(t, x.IsOptimized())
+
+		y := alpacadecimal.NewFromInt(10_000_000_000_000)
+		require.False(t, y.IsOptimized())
+	})
+
+	t.Run("Decimal.Exponent", func(t *testing.T) {
+		require.Equal(t, int32(-6), alpacadecimal.RequireFromString("1").Exponent())
+	})
+}
+
+func TestSpecialAPIs(t *testing.T) {
+	alpacadecimal.ChangeMaxPrecision(12)
+
+	x := alpacadecimal.NewFromInt(123)
+	require.Equal(t, int32(-12), x.Exponent())
+	require.Equal(t, "123000000000000", x.Coefficient().String())
+	require.Equal(t, int64(123000000000000), x.CoefficientInt64())
+	require.Equal(t, 15, x.NumDigits())
+
+	y := decimal.NewFromInt(123)
+	require.Equal(t, int32(0), y.Exponent())
+	require.Equal(t, "123", y.Coefficient().String())
+	require.Equal(t, int64(123), y.CoefficientInt64())
+	require.Equal(t, 3, y.NumDigits())
+}
+
+func commontFunctionTest(t *testing.T) {
+	one := alpacadecimal.NewFromInt(1)
+	two := alpacadecimal.NewFromInt(2)
+	three := alpacadecimal.NewFromInt(3)
+
+	t.Run("Zero", func(t *testing.T) {
+		require.Equal(t, "0", alpacadecimal.Zero.String())
+		require.True(t, alpacadecimal.Zero.Equal(alpacadecimal.Zero))
+		require.True(t, alpacadecimal.Zero.GreaterThan(alpacadecimal.NewFromInt(-1)))
+		require.True(t, alpacadecimal.Zero.LessThan(alpacadecimal.NewFromInt(1)))
+	})
+
+	t.Run("RescalePair", func(t *testing.T) {
+		d1, d2 := alpacadecimal.RescalePair(one, two)
+		shouldEqual(t, d1, one)
+		shouldEqual(t, d2, two)
+	})
+
+	t.Run("Avg", func(t *testing.T) {
+		shouldEqual(t, alpacadecimal.Avg(one, two, three), two)
+	})
+
+	t.Run("Max", func(t *testing.T) {
+		require.True(t, alpacadecimal.Max(one, two, three).Equal(three))
+	})
+
+	t.Run("Min", func(t *testing.T) {
+		require.True(t, alpacadecimal.Min(one, two, three).Equal(one))
 	})
 
 	t.Run("NewFromBigInt", func(t *testing.T) {
@@ -452,10 +634,6 @@ func TestDecimal(t *testing.T) {
 		// 		return x.String(), y.String()
 		// 	})
 		// }
-	})
-
-	t.Run("Decimal.Exponent", func(t *testing.T) {
-		require.Equal(t, int32(-12), alpacadecimal.RequireFromString("1").Exponent())
 	})
 
 	t.Run("Decimal.Float64", func(t *testing.T) {
@@ -981,30 +1159,6 @@ func TestDecimal(t *testing.T) {
 		})
 	})
 
-	t.Run("Decimal.Truncate", func(t *testing.T) {
-		x := alpacadecimal.NewFromFloat(1.234)
-		require.Equal(t, "1", x.Truncate(0).String())
-		require.Equal(t, "1.2", x.Truncate(1).String())
-		require.Equal(t, "1.23", x.Truncate(2).String())
-		require.Equal(t, "1.234", x.Truncate(3).String())
-		require.Equal(t, "1.234", x.Truncate(4).String())
-
-		y := alpacadecimal.NewFromFloat(-1.234)
-		require.Equal(t, "-1", y.Truncate(0).String())
-		require.Equal(t, "-1.2", y.Truncate(1).String())
-		require.Equal(t, "-1.23", y.Truncate(2).String())
-		require.Equal(t, "-1.234", y.Truncate(3).String())
-		require.Equal(t, "-1.234", y.Truncate(4).String())
-
-		for i := int32(0); i < 10; i++ {
-			requireCompatible(t, func(input string) (string, string) {
-				x := alpacadecimal.RequireFromString(input).Truncate(i).String()
-				y := decimal.RequireFromString(input).Truncate(i).String()
-				return x, y
-			})
-		}
-	})
-
 	t.Run("Decimal.UnmarshalBinary", func(t *testing.T) {
 		x := alpacadecimal.NewFromInt(123)
 		data, err := x.MarshalBinary()
@@ -1082,32 +1236,6 @@ func TestDecimal(t *testing.T) {
 		checkFloat(12345.123456789, "12345.123456789")
 		checkFloat(-12345.123456789, "-12345.123456789")
 	})
-
-	t.Run("Decimal.GetFixed", func(t *testing.T) {
-		x := alpacadecimal.NewFromInt(123)
-		require.Equal(t, int64(123_000_000_000_000), x.GetFixed())
-
-		y := alpacadecimal.NewFromInt(1234567890)
-		require.Equal(t, int64(0), y.GetFixed())
-	})
-
-	t.Run("Decimal.GetFallback", func(t *testing.T) {
-		x := alpacadecimal.NewFromInt(123)
-		require.Nil(t, x.GetFallback())
-
-		y := alpacadecimal.NewFromInt(1234567890)
-		require.NotNil(t, y.GetFallback())
-		require.Equal(t, "1234567890", y.GetFallback().String())
-	})
-
-	t.Run("Decimal.IsOptimized", func(t *testing.T) {
-		x := alpacadecimal.NewFromInt(123)
-		require.True(t, x.IsOptimized())
-
-		y := alpacadecimal.NewFromInt(1234567890)
-		require.False(t, y.IsOptimized())
-	})
-
 	t.Run("NullDecimal", func(t *testing.T) {
 		var _ alpacadecimal.NullDecimal = alpacadecimal.NullDecimal{Decimal: alpacadecimal.NewFromInt(1), Valid: true}
 		var _ alpacadecimal.NullDecimal = alpacadecimal.NullDecimal{Valid: false}
@@ -1271,18 +1399,4 @@ func TestDecimal(t *testing.T) {
 			require.Equal(t, "123456789", v.(string))
 		}
 	})
-}
-
-func TestSpecialAPIs(t *testing.T) {
-	x := alpacadecimal.NewFromInt(123)
-	require.Equal(t, int32(-12), x.Exponent())
-	require.Equal(t, "123000000000000", x.Coefficient().String())
-	require.Equal(t, int64(123000000000000), x.CoefficientInt64())
-	require.Equal(t, 15, x.NumDigits())
-
-	y := decimal.NewFromInt(123)
-	require.Equal(t, int32(0), y.Exponent())
-	require.Equal(t, "123", y.Coefficient().String())
-	require.Equal(t, int64(123), y.CoefficientInt64())
-	require.Equal(t, 3, y.NumDigits())
 }
