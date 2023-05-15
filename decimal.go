@@ -1189,8 +1189,7 @@ func parseFixed[T string | []byte](v T) (int64, bool) {
 
 func (d Decimal) asFallback() decimal.Decimal {
 	if d.fallback == nil {
-		x := big.NewInt(d.fixed)
-		return decimal.NewFromBigInt(x, -12)
+		return decimal.New(d.fixed, -precision)
 	}
 	return *d.fallback
 }
