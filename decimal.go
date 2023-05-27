@@ -126,7 +126,7 @@ func New(value int64, exp int32) Decimal {
 			}
 		}
 		// when exp > 7, it would be greater than maxInt
-		if exp <= 6 {
+		if exp >= 0 && exp <= 6 {
 			s := pow10Table[exp]
 			if value >= minInt/s && value <= maxInt/s {
 				return Decimal{fixed: value * pow10Table[precision+exp]}
@@ -1081,7 +1081,6 @@ func (d *NullDecimal) UnmarshalText(text []byte) error {
 
 	d.Valid = true
 	return nil
-
 }
 
 func (d NullDecimal) Value() (driver.Value, error) {
