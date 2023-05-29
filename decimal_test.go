@@ -138,6 +138,18 @@ func TestDecimal(t *testing.T) {
 			shouldEqual(t, x, alpacadecimal.RequireFromString("10000000"))
 			require.False(t, x.IsOptimized())
 		}
+
+		{
+			x := alpacadecimal.New(10_000_000, 0)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("10000000"))
+			require.False(t, x.IsOptimized())
+		}
+
+		{
+			x := alpacadecimal.New(1_000_000_000, -2)
+			shouldEqual(t, x, alpacadecimal.RequireFromString("10000000"))
+			require.False(t, x.IsOptimized())
+		}
 	})
 
 	t.Run("NewFromBigInt", func(t *testing.T) {
@@ -184,7 +196,6 @@ func TestDecimal(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, x.String(), y.String())
-
 	})
 
 	t.Run("NewFromInt", func(t *testing.T) {
