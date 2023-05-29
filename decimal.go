@@ -124,9 +124,7 @@ func New(value int64, exp int32) Decimal {
 			if value >= minInt*s && value <= maxInt*s {
 				return Decimal{fixed: value * pow10Table[precision+exp]}
 			}
-		}
-		// when exp > 7, it would be greater than maxInt
-		if exp >= 0 && exp <= 6 {
+		} else if exp <= 6 { // when exp > 6, it would be greater than maxInt
 			s := pow10Table[exp]
 			if value >= minInt/s && value <= maxInt/s {
 				return Decimal{fixed: value * pow10Table[precision+exp]}
