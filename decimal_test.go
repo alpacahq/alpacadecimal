@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/alpacahq/alpacadecimal"
@@ -651,6 +652,22 @@ func TestDecimal(t *testing.T) {
 		shouldEqual(t, x, y)
 	})
 
+    t.Run("Decimal.MarshalGQL", func(t *testing.T) {
+		{
+			var x alpacadecimal.Decimal
+			err := x.UnmarshalGQL("123.456")
+			require.NoError(t, err)
+			shouldEqual(t, x, alpacadecimal.New(123456, -3))
+		}
+
+		{
+			var x alpacadecimal.Decimal
+			err := x.UnmarshalGQL([]byte("error"))
+			require.Error(t, err)
+			shouldEqual(t, alpacadecimal.Zero, x)
+		}
+    })
+
 	t.Run("Decimal.MarshalJSON", func(t *testing.T) {
 		{
 			var x alpacadecimal.Decimal
@@ -1026,6 +1043,22 @@ func TestDecimal(t *testing.T) {
 		require.NoError(t, err)
 
 		shouldEqual(t, x, y)
+	})
+
+	t.Run("Decimal.UnmarshalGQL", func(t *testing.T) {
+		{
+            var b strings.Builder
+			x := alpacadecimal.NewFromInt(123)
+			x.MarshalGQL(&b)
+            require.Equal(t, "123", b.String())
+		}
+
+		{
+            var b strings.Builder
+			x := alpacadecimal.NewFromInt(123456789)
+			x.MarshalGQL(&b)
+			require.Equal(t, "123456789", b.String())
+		}
 	})
 
 	t.Run("Decimal.UnmarshalJSON", func(t *testing.T) {
