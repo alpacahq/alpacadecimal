@@ -774,6 +774,7 @@ func (d *Decimal) Scan(value interface{}) error {
 		fixed, ok := parseFixed(v)
 		if ok {
 			d.fixed = fixed
+			d.fallback = nil
 			return nil
 		}
 
@@ -781,6 +782,7 @@ func (d *Decimal) Scan(value interface{}) error {
 		fixed, ok := parseFixed(v)
 		if ok {
 			d.fixed = fixed
+			d.fallback = nil
 			return nil
 		}
 	}
@@ -959,6 +961,7 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 func (d *Decimal) UnmarshalJSON(decimalBytes []byte) error {
 	if fixed, ok := parseFixed(decimalBytes); ok {
 		d.fixed = fixed
+		d.fallback = nil
 		return nil
 	}
 
@@ -976,6 +979,7 @@ func (d *Decimal) UnmarshalJSON(decimalBytes []byte) error {
 func (d *Decimal) UnmarshalText(text []byte) error {
 	if fixed, ok := parseFixed(text); ok {
 		d.fixed = fixed
+		d.fallback = nil
 		return nil
 	}
 
