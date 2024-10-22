@@ -13,15 +13,17 @@ import (
 // currently support 12 precision, this is tunnable,
 // more precision => smaller maxInt
 // less precision => bigger maxInt
-const precision = 12
-const scale = 1e12
-const maxInt int64 = int64(math.MaxInt64) / scale
-const minInt int64 = int64(math.MinInt64) / scale
-const maxIntInFixed int64 = maxInt * scale
-const minIntInFixed int64 = minInt * scale
-const a1000InFixed int64 = 1000 * scale
-const aNeg1000InFixed int64 = -1000 * scale
-const aCentInFixed int64 = scale / 100
+const (
+	precision             = 12
+	scale                 = 1e12
+	maxInt          int64 = int64(math.MaxInt64) / scale
+	minInt          int64 = int64(math.MinInt64) / scale
+	maxIntInFixed   int64 = maxInt * scale
+	minIntInFixed   int64 = minInt * scale
+	a1000InFixed    int64 = 1000 * scale
+	aNeg1000InFixed int64 = -1000 * scale
+	aCentInFixed    int64 = scale / 100
+)
 
 var pow10Table []int64 = []int64{
 	1e0, 1e1, 1e2, 1e3, 1e4,
@@ -38,11 +40,15 @@ var pow10Table []int64 = []int64{
 //	`valueCache[200000] = "1000"`
 //
 // this consumes about 9 MB in memory with pprof check.
-const cacheSize = 200001
-const cacheOffset = 100000
+const (
+	cacheSize   = 200001
+	cacheOffset = 100000
+)
 
-var valueCache [cacheSize]driver.Value
-var stringCache [cacheSize]string
+var (
+	valueCache  [cacheSize]driver.Value
+	stringCache [cacheSize]string
+)
 
 func init() {
 	// init cache
@@ -62,10 +68,12 @@ func init() {
 // mostly due to lack of usage in Alpaca. we should be able to move "fallback" to "optimized" as needed.
 
 // Variables
-var DivisionPrecision = decimal.DivisionPrecision
-var ExpMaxIterations = decimal.ExpMaxIterations
-var MarshalJSONWithoutQuotes = decimal.MarshalJSONWithoutQuotes
-var Zero = Decimal{fixed: 0}
+var (
+	DivisionPrecision        = decimal.DivisionPrecision
+	ExpMaxIterations         = decimal.ExpMaxIterations
+	MarshalJSONWithoutQuotes = decimal.MarshalJSONWithoutQuotes
+	Zero                     = Decimal{fixed: 0}
+)
 
 func RescalePair(d1 Decimal, d2 Decimal) (Decimal, Decimal) {
 	if d1.fallback == nil && d2.fallback == nil {
@@ -76,13 +84,13 @@ func RescalePair(d1 Decimal, d2 Decimal) (Decimal, Decimal) {
 }
 
 type Decimal struct {
+	// fallback to original decimal.Decimal if necessary
+	fallback *decimal.Decimal
+
 	// represent decimal with 12 precision, 1.23 will have `fixed = 1_230_000_000_000`
 	// max support decimal is 9_223_372.000_000_000_000
 	// min support decimal is -9_223_372.000_000_000_000
 	fixed int64
-
-	// fallback to original decimal.Decimal if necessary
-	fallback *decimal.Decimal
 }
 
 // optimized:
