@@ -360,3 +360,38 @@ func BenchmarkRound(b *testing.B) {
 		_ = result
 	})
 }
+
+func BenchmarkNewFromDecimal(b *testing.B) {
+	b.Run("alpacadecimal.Decimal.NewFromDecimal", func(b *testing.B) {
+		d := decimal.New(123, -12)
+
+		var result alpacadecimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromDecimal(d)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal.Decimal.RequireFromString", func(b *testing.B) {
+		d := decimal.New(123, -12)
+
+		var result alpacadecimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.RequireFromString(d.String())
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal.Decimal.New", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.New(123, -12)
+		}
+		_ = result
+	})
+
+}

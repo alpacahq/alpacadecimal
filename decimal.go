@@ -118,20 +118,28 @@ func Min(first Decimal, rest ...Decimal) Decimal {
 // optimized:
 // New returns a new fixed-point decimal, value * 10 ^ exp.
 func New(value int64, exp int32) Decimal {
+	d, done := tryOptNew(value, exp)
+	if done {
+		return d
+	}
+	return newFromDecimal(decimal.New(value, exp))
+}
+
+func tryOptNew(value int64, exp int32) (Decimal, bool) {
 	if exp >= -12 {
 		if exp <= 0 {
 			s := pow10Table[-exp]
 			if value >= minInt*s && value <= maxInt*s {
-				return Decimal{fixed: value * pow10Table[precision+exp]}
+				return Decimal{fixed: value * pow10Table[precision+exp]}, true
 			}
 		} else if exp <= 6 { // when exp > 6, it would be greater than maxInt
 			s := pow10Table[exp]
 			if value >= minInt/s && value <= maxInt/s {
-				return Decimal{fixed: value * pow10Table[precision+exp]}
+				return Decimal{fixed: value * pow10Table[precision+exp]}, true
 			}
 		}
 	}
-	return newFromDecimal(decimal.New(value, exp))
+	return Decimal{}, false
 }
 
 // fallback:
@@ -1090,6 +1098,23 @@ func (d NullDecimal) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return d.Decimal.Value()
+}
+
+// optimized:
+// Create a new alpacadecimal.Decimal from a decimal.Decimal.
+// Attempts to set the fixed value if possible.
+func NewFromDecimal(d decimal.Decimal) Decimal {
+	co := d.Coefficient()
+	if !co.IsInt64() {
+		return newFromDecimal(d) // fallback
+	}
+	value := co.Int64()
+	exp := d.Exponent()
+	res, done := tryOptNew(value, exp)
+	if done {
+		return res
+	}
+	return newFromDecimal(d)
 }
 
 // internal implementation

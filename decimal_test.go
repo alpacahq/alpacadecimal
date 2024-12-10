@@ -198,6 +198,22 @@ func TestDecimal(t *testing.T) {
 		require.Equal(t, x.String(), y.String())
 	})
 
+	t.Run("NewFromDecimal", func(t *testing.T) {
+		// first, with optimized decimal
+		x := alpacadecimal.NewFromDecimal(decimal.New(123, -2))
+		y := alpacadecimal.New(123, -2)
+		shouldEqual(t, x, y)
+
+		// the prior means of conversion from decimal commonly used
+		y = alpacadecimal.RequireFromString(decimal.New(123, -2).String())
+		shouldEqual(t, x, y)
+
+		// now, with out of optimization range decimal
+		x = alpacadecimal.NewFromDecimal(decimal.New(123, -13))
+		y = alpacadecimal.New(123, -13)
+		shouldEqual(t, x, y)
+	})
+
 	t.Run("NewFromInt", func(t *testing.T) {
 		x := alpacadecimal.NewFromInt(123)
 		y, err := alpacadecimal.NewFromString("123")
