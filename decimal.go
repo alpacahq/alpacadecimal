@@ -126,8 +126,8 @@ func Min(first Decimal, rest ...Decimal) Decimal {
 // optimized:
 // New returns a new fixed-point decimal, value * 10 ^ exp.
 func New(value int64, exp int32) Decimal {
-	d, done := tryOptNew(value, exp)
-	if done {
+	d, ok := tryOptNew(value, exp)
+	if ok {
 		return d
 	}
 	return newFromDecimal(decimal.New(value, exp))
@@ -1118,8 +1118,8 @@ func NewFromDecimal(d decimal.Decimal) Decimal {
 	}
 	value := co.Int64()
 	exp := d.Exponent()
-	res, done := tryOptNew(value, exp)
-	if done {
+	res, ok := tryOptNew(value, exp)
+	if ok {
 		return res
 	}
 	return newFromDecimal(d)
