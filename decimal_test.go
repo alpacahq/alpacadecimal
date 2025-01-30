@@ -176,12 +176,54 @@ func TestDecimal(t *testing.T) {
 	})
 
 	t.Run("NewFromFloatWithExponent", func(t *testing.T) {
-		input := 123.456
+		{
+			input := 123.456
 
-		x := alpacadecimal.NewFromFloatWithExponent(input, -2)
-		y := decimal.NewFromFloatWithExponent(input, -2)
+			x := alpacadecimal.NewFromFloatWithExponent(input, -2)
+			y := decimal.NewFromFloatWithExponent(input, -2)
 
-		require.Equal(t, x.String(), y.String())
+			require.Equal(t, x.String(), y.String())
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			input := 123.4567890192214
+
+			x := alpacadecimal.NewFromFloatWithExponent(input, -12)
+			y := decimal.NewFromFloatWithExponent(input, -12)
+
+			require.Equal(t, x.String(), y.String())
+			require.True(t, x.IsOptimized())
+		}
+
+		{
+			input := 123.4567890192214
+
+			x := alpacadecimal.NewFromFloatWithExponent(input, -14)
+			y := decimal.NewFromFloatWithExponent(input, -14)
+
+			require.Equal(t, x.String(), y.String())
+			require.False(t, x.IsOptimized())
+		}
+
+		{
+			input := 1_123_123.4567890192214
+
+			x := alpacadecimal.NewFromFloatWithExponent(input, -12)
+			y := decimal.NewFromFloatWithExponent(input, -12)
+
+			require.Equal(t, x.String(), y.String())
+			require.True(t, x.IsOptimized())
+		}
+		{
+			input := 9_323_123.4567890192214 // max support decimal is 9_223_372.000_000_000_000
+
+			x := alpacadecimal.NewFromFloatWithExponent(input, -12)
+			y := decimal.NewFromFloatWithExponent(input, -12)
+
+			require.Equal(t, x.String(), y.String())
+			require.False(t, x.IsOptimized())
+		}
 	})
 
 	t.Run("NewFromFormattedString", func(t *testing.T) {
