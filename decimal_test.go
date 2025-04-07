@@ -169,6 +169,8 @@ func TestDecimal(t *testing.T) {
 			shouldEqual(t, x, y)
 		}
 		{
+			// This input caused optimized NewFromFloat to return an incorrect
+			// value.
 			x := alpacadecimal.NewFromFloat(17600.095)
 			y, err := alpacadecimal.NewFromString("17600.095")
 			require.NoError(t, err)

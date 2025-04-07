@@ -156,20 +156,10 @@ func NewFromBigInt(value *big.Int, exp int32) Decimal {
 	return newFromDecimal(decimal.NewFromBigInt(value, exp))
 }
 
-// optimized:
 // NewFromFloat converts a float64 to Decimal.
 //
 // NOTE: this will panic on NaN, +/-inf
 func NewFromFloat(f float64) Decimal {
-	picoFloat := f * float64(scale)
-	picoInt64 := int64(picoFloat)
-
-	// check if it's within range and is whole number
-	// integer overflow is accounted for via the `picoFloat == float64(picoInt64)` check
-	if picoInt64 >= minIntInFixed && picoInt64 <= maxIntInFixed && picoFloat == float64(picoInt64) {
-		return Decimal{fixed: picoInt64}
-	}
-
 	return newFromDecimal(decimal.NewFromFloat(f))
 }
 
