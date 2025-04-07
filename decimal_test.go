@@ -162,10 +162,18 @@ func TestDecimal(t *testing.T) {
 	})
 
 	t.Run("NewFromFloat", func(t *testing.T) {
-		x := alpacadecimal.NewFromFloat(1.234567)
-		y, err := alpacadecimal.NewFromString("1.234567")
-		require.NoError(t, err)
-		shouldEqual(t, x, y)
+		{
+			x := alpacadecimal.NewFromFloat(1.234567)
+			y, err := alpacadecimal.NewFromString("1.234567")
+			require.NoError(t, err)
+			shouldEqual(t, x, y)
+		}
+		{
+			x := alpacadecimal.NewFromFloat(17600.095)
+			y, err := alpacadecimal.NewFromString("17600.095")
+			require.NoError(t, err)
+			shouldEqual(t, x, y)
+		}
 	})
 
 	t.Run("NewFromFloat32", func(t *testing.T) {
