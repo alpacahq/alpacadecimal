@@ -156,11 +156,21 @@ func NewFromBigInt(value *big.Int, exp int32) Decimal {
 	return newFromDecimal(decimal.NewFromBigInt(value, exp))
 }
 
+// optimized:
 // NewFromFloat converts a float64 to Decimal.
 //
 // NOTE: this will panic on NaN, +/-inf
 func NewFromFloat(f float64) Decimal {
-	return newFromDecimal(decimal.NewFromFloat(f))
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return newFromDecimal(decimal.NewFromFloat(f))
+	}
+	// Convert float to string to avoid precision issues
+	str := strconv.FormatFloat(f, 'f', -1, 64)
+	d, err := NewFromString(str)
+	if err != nil {
+		return newFromDecimal(decimal.NewFromFloat(f))
+	}
+	return d
 }
 
 // fallback:
