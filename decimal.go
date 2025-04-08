@@ -161,16 +161,16 @@ func NewFromBigInt(value *big.Int, exp int32) Decimal {
 //
 // NOTE: this will panic on NaN, +/-inf
 func NewFromFloat(f float64) Decimal {
-	picoFloat := f * float64(scale)
-	picoInt64 := int64(picoFloat)
-
-	// check if it's within range and is whole number
-	// integer overflow is accounted for via the `picoFloat == float64(picoInt64)` check
-	if picoInt64 >= minIntInFixed && picoInt64 <= maxIntInFixed && picoFloat == float64(picoInt64) {
-		return Decimal{fixed: picoInt64}
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return newFromDecimal(decimal.NewFromFloat(f))
 	}
-
-	return newFromDecimal(decimal.NewFromFloat(f))
+	// Convert float to string to avoid precision issues
+	str := strconv.FormatFloat(f, 'f', -1, 64)
+	d, err := NewFromString(str)
+	if err != nil {
+		return newFromDecimal(decimal.NewFromFloat(f))
+	}
+	return d
 }
 
 // fallback:
