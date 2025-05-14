@@ -434,3 +434,49 @@ func BenchmarkRoundUp(b *testing.B) {
 		_ = result3
 	})
 }
+
+func BenchmarkRoundDown(b *testing.B) {
+	x1 := 1.23456789
+	x2 := 123456.123456789
+	x3 := 1234567.123456789
+
+	b.Run("alpacadecimal.Decimal", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(x1)
+		d2 := alpacadecimal.NewFromFloat(x2)
+		d3 := alpacadecimal.NewFromFloat(x3)
+
+		var result1, result2, result3 alpacadecimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			for i := int32(-6); i <= 12; i++ {
+				result1 = d1.RoundDown(i)
+				result2 = d2.RoundDown(i)
+				result3 = d3.RoundDown(i)
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
+	})
+
+	b.Run("decimal.Decimal", func(b *testing.B) {
+		d1 := decimal.NewFromFloat(x1)
+		d2 := decimal.NewFromFloat(x2)
+		d3 := decimal.NewFromFloat(x3)
+
+		var result1, result2, result3 decimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			for i := int32(-6); i <= 12; i++ {
+				result1 = d1.RoundDown(i)
+				result2 = d2.RoundDown(i)
+				result3 = d3.RoundDown(i)
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
+	})
+}

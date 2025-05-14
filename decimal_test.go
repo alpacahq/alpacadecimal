@@ -889,7 +889,7 @@ func TestDecimal(t *testing.T) {
 	})
 
 	t.Run("Decimal.RoundDown", func(t *testing.T) {
-		for i := int32(0); i < 10; i++ {
+		for i := int32(-7); i < 14; i++ {
 			requireCompatible(t, func(input string) (string, string) {
 				x := alpacadecimal.RequireFromString(input).RoundDown(i).String()
 				y := decimal.RequireFromString(input).RoundDown(i).String()

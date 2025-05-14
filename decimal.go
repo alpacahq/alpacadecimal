@@ -731,7 +731,7 @@ func (d Decimal) RoundCeil(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundCeil(places))
 }
 
-// fallback:
+// optimized:
 // RoundDown rounds the decimal towards zero.
 //
 // Example:
@@ -741,7 +741,22 @@ func (d Decimal) RoundCeil(places int32) Decimal {
 //	NewFromFloat(1.1001).RoundDown(2).String() // output: "1.1"
 //	NewFromFloat(-1.454).RoundDown(1).String() // output: "-1.5"
 func (d Decimal) RoundDown(places int32) Decimal {
-	return newFromDecimal(d.asFallback().RoundDown(places))
+	if d.fallback != nil || places < -6 {
+		return newFromDecimal(d.asFallback().RoundDown(places))
+	}
+
+	if places >= precision {
+		// no need to round
+		return d
+	}
+
+	s := pow10Table[precision-places]
+	rescaled := (d.fixed / s) * s
+	if rescaled == d.fixed {
+		return d
+	}
+
+	return Decimal{fixed: rescaled}
 }
 
 // fallback:
