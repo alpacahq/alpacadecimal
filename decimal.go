@@ -757,7 +757,7 @@ func (d Decimal) RoundFloor(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundFloor(places))
 }
 
-// fallback:
+// optimized:
 // RoundUp rounds the decimal away from zero.
 //
 // Example:
@@ -767,7 +767,25 @@ func (d Decimal) RoundFloor(places int32) Decimal {
 //	NewFromFloat(1.1001).RoundUp(2).String() // output: "1.11"
 //	NewFromFloat(-1.454).RoundUp(1).String() // output: "-1.4"
 func (d Decimal) RoundUp(places int32) Decimal {
-	return newFromDecimal(d.asFallback().RoundUp(places))
+	if d.fallback != nil || places < -6 {
+		return newFromDecimal(d.asFallback().RoundUp(places))
+	}
+
+	if places >= precision {
+		// no need to round
+		return d
+	}
+
+	s := pow10Table[precision-places]
+	rescaled := d.fixed / s * s
+	if rescaled == d.fixed {
+		return d
+	}
+
+	if d.fixed >= 0 {
+		return Decimal{fixed: rescaled + (1 * s)}
+	}
+	return Decimal{fixed: rescaled - (1 * s)}
 }
 
 // optimized:

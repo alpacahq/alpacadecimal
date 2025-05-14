@@ -4,11 +4,11 @@ import (
 	"database/sql/driver"
 	"testing"
 
-	"github.com/alpacahq/alpacadecimal"
 	ericdecimal "github.com/ericlagergren/decimal"
 	ericpostgres "github.com/ericlagergren/decimal/sql/postgres"
-
 	"github.com/shopspring/decimal"
+
+	"github.com/alpacahq/alpacadecimal"
 )
 
 func BenchmarkValue(b *testing.B) {
@@ -215,7 +215,6 @@ func BenchmarkMul(b *testing.B) {
 			result = d1.Mul(d2)
 		}
 		_ = result
-
 	})
 
 	b.Run("eric.Decimal", func(b *testing.B) {
@@ -229,7 +228,6 @@ func BenchmarkMul(b *testing.B) {
 			result = result.Mul(d1, d2)
 		}
 		_ = result
-
 	})
 }
 
@@ -261,7 +259,6 @@ func BenchmarkDiv(b *testing.B) {
 			result = d1.Div(d2)
 		}
 		_ = result
-
 	})
 
 	b.Run("eric.Decimal", func(b *testing.B) {
@@ -275,7 +272,6 @@ func BenchmarkDiv(b *testing.B) {
 			result = result.Quo(d1, d2)
 		}
 		_ = result
-
 	})
 }
 
@@ -304,7 +300,6 @@ func BenchmarkString(b *testing.B) {
 			result = d1.String()
 		}
 		_ = result
-
 	})
 
 	b.Run("eric.Decimal", func(b *testing.B) {
@@ -345,7 +340,6 @@ func BenchmarkRound(b *testing.B) {
 			result = d1.Round(2)
 		}
 		_ = result
-
 	})
 
 	b.Run("eric.Decimal", func(b *testing.B) {
@@ -393,5 +387,50 @@ func BenchmarkNewFromDecimal(b *testing.B) {
 		}
 		_ = result
 	})
+}
 
+func BenchmarkRoundUp(b *testing.B) {
+	x1 := 1.23456789
+	x2 := 123456.123456789
+	x3 := 1234567.123456789
+
+	b.Run("alpacadecimal.Decimal", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(x1)
+		d2 := alpacadecimal.NewFromFloat(x2)
+		d3 := alpacadecimal.NewFromFloat(x3)
+
+		var result1, result2, result3 alpacadecimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			for i := int32(-6); i <= 12; i++ {
+				result1 = d1.RoundUp(i)
+				result2 = d2.RoundUp(i)
+				result3 = d3.RoundUp(i)
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
+	})
+
+	b.Run("decimal.Decimal", func(b *testing.B) {
+		d1 := decimal.NewFromFloat(x1)
+		d2 := decimal.NewFromFloat(x2)
+		d3 := decimal.NewFromFloat(x3)
+
+		var result1, result2, result3 decimal.Decimal
+
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			for i := int32(-6); i <= 12; i++ {
+				result1 = d1.RoundUp(i)
+				result2 = d2.RoundUp(i)
+				result3 = d3.RoundUp(i)
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
+	})
 }
