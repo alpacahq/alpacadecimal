@@ -777,7 +777,7 @@ func (d Decimal) RoundUp(places int32) Decimal {
 	}
 
 	s := pow10Table[precision-places]
-	rescaled := d.fixed / s * s
+	rescaled := (d.fixed / s) * s
 	if rescaled == d.fixed {
 		return d
 	}
