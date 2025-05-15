@@ -33,20 +33,28 @@ var cases = []string{
 	"123456.123456789", "123456.1234567890", "123456.12345678901", "123456.123456789012", "123456.1234567890123",
 	"1234567.123456789", "1234567.1234567890", "1234567.12345678901", "1234567.123456789012", "1234567.1234567890123",
 	"12345678.123456789", "12345678.1234567890", "12345678.12345678901", "12345678.123456789012", "12345678.1234567890123",
+	"9000000", "9000000.1",
+	"9223371", "9223371.4", "9223371.5",
+	"9223372.4", "9223372.5",
+	"9223373",
 
 	// neg decimal
 	"-0.1", "-1.12", "-0.334", "-12.33345", "-34.23493899450934859345304958345", "-20.0999009", "-1000000000.123456", "-100000000000000.01",
 	"-123456.123456789", "-123456.1234567890", "-123456.12345678901", "-123456.123456789012", "-123456.1234567890123",
 	"-1234567.123456789", "-1234567.1234567890", "-1234567.12345678901", "-1234567.123456789012", "-1234567.1234567890123",
 	"-12345678.123456789", "-12345678.1234567890", "-12345678.12345678901", "-12345678.123456789012", "-12345678.1234567890123",
+	"-9000000", "-9000000.1",
+	"-9223371", "-9223371.4", "-9223371.5",
+	"-9223372.4", "-9223372.5",
+	"-9223373",
 }
 
 // helper func to check compatibility of alpacadecimal.Decimal and decimal.Decimal
-func requireCompatible[T any](t *testing.T, f func(input string) (x, y T)) {
+func requireCompatible[T any](t *testing.T, f func(input string) (x, y T), msgAndArgs ...interface{}) {
 	for _, c := range cases {
 		x, y := f(c)
 
-		require.Equal(t, x, y, fmt.Sprintf("not compatible for test %s with input %s", t.Name(), c))
+		require.Equal(t, x, y, fmt.Sprintf("not compatible for test %s with input %s", t.Name(), c), msgAndArgs)
 	}
 }
 
@@ -894,7 +902,7 @@ func TestDecimal(t *testing.T) {
 				x := alpacadecimal.RequireFromString(input).RoundDown(i).String()
 				y := decimal.RequireFromString(input).RoundDown(i).String()
 				return x, y
-			})
+			}, "places", i)
 		}
 	})
 
@@ -914,7 +922,7 @@ func TestDecimal(t *testing.T) {
 				x := alpacadecimal.RequireFromString(input).RoundUp(i).String()
 				y := decimal.RequireFromString(input).RoundUp(i).String()
 				return x, y
-			})
+			}, "places", i)
 		}
 	})
 
