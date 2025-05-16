@@ -14,15 +14,17 @@ import (
 // more precision => smaller maxInt
 // less precision => bigger maxInt
 const (
-	precision             = 12
-	scale                 = 1e12
-	maxInt          int64 = int64(math.MaxInt64) / scale
-	minInt          int64 = int64(math.MinInt64) / scale
-	maxIntInFixed   int64 = maxInt * scale
-	minIntInFixed   int64 = minInt * scale
-	a1000InFixed    int64 = 1000 * scale
-	aNeg1000InFixed int64 = -1000 * scale
-	aCentInFixed    int64 = scale / 100
+	precision                        = 12
+	scale                            = 1e12
+	maxInt                     int64 = int64(math.MaxInt64) / scale
+	minInt                     int64 = int64(math.MinInt64) / scale
+	maxIntInFixed              int64 = maxInt * scale
+	minIntInFixed              int64 = minInt * scale
+	a1000InFixed               int64 = 1000 * scale
+	aNeg1000InFixed            int64 = -1000 * scale
+	aCentInFixed               int64 = scale / 100
+	maxRoundUpThresholdInFixed int64 = 9 * 1e18  // 900_000_000_000_000_000
+	minRoundUpThresholdInFixed int64 = -9 * 1e18 // -900_000_000_000_000_000
 )
 
 var pow10Table []int64 = []int64{
@@ -731,7 +733,7 @@ func (d Decimal) RoundCeil(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundCeil(places))
 }
 
-// fallback:
+// optimized:
 // RoundDown rounds the decimal towards zero.
 //
 // Example:
@@ -741,7 +743,28 @@ func (d Decimal) RoundCeil(places int32) Decimal {
 //	NewFromFloat(1.1001).RoundDown(2).String() // output: "1.1"
 //	NewFromFloat(-1.454).RoundDown(1).String() // output: "-1.5"
 func (d Decimal) RoundDown(places int32) Decimal {
-	return newFromDecimal(d.asFallback().RoundDown(places))
+	if d.fallback != nil || places <= -7 {
+		sd := d.asFallback().RoundDown(places)
+		if places <= -7 {
+			// always more than MaxIntInFixed
+			return newFromDecimal(sd)
+		}
+		// try optimize
+		return NewFromDecimal(sd)
+	}
+
+	if places >= precision {
+		// no need to round
+		return d
+	}
+
+	s := pow10Table[precision-places]
+	rescaled := (d.fixed / s) * s
+	if rescaled == d.fixed {
+		return d
+	}
+
+	return Decimal{fixed: rescaled}
 }
 
 // fallback:
@@ -757,7 +780,7 @@ func (d Decimal) RoundFloor(places int32) Decimal {
 	return newFromDecimal(d.asFallback().RoundFloor(places))
 }
 
-// fallback:
+// optimized:
 // RoundUp rounds the decimal away from zero.
 //
 // Example:
@@ -767,7 +790,45 @@ func (d Decimal) RoundFloor(places int32) Decimal {
 //	NewFromFloat(1.1001).RoundUp(2).String() // output: "1.11"
 //	NewFromFloat(-1.454).RoundUp(1).String() // output: "-1.4"
 func (d Decimal) RoundUp(places int32) Decimal {
-	return newFromDecimal(d.asFallback().RoundUp(places))
+	if d.IsZero() {
+		return d
+	}
+	if d.fallback != nil ||
+		// roundup result is always more than MaxIntInFixed
+		places <= -7 ||
+		// roundup could cause fallback depending on fixed value
+		// i.e. 9_000_000.0 with places=-6 =>  9_000_000 (optimizable)
+		// i.e. 9_000_000.1 with places=-6 => 10_000_000 (fallback)
+		// i.e. 9_200_000.1 with places=-5 =>  9_300_000 (fallback)
+		(places < 0 &&
+			(d.fixed > maxRoundUpThresholdInFixed || d.fixed < minRoundUpThresholdInFixed)) {
+		// fallback
+		sd := d.asFallback().RoundUp(places)
+		if places <= -7 {
+			// always more than MaxIntInFixed
+			return newFromDecimal(sd)
+		}
+		// try optimize
+		// i.e. 0.12345678901234 with places=1 becomes 0.1 and optimized
+		r := NewFromDecimal(sd)
+		return r
+	}
+
+	if places >= precision {
+		// no need to round
+		return d
+	}
+
+	s := pow10Table[precision-places]
+	rescaled := (d.fixed / s) * s
+	if rescaled == d.fixed {
+		return d
+	}
+
+	if d.fixed >= 0 {
+		return Decimal{fixed: rescaled + (1 * s)}
+	}
+	return Decimal{fixed: rescaled - (1 * s)}
 }
 
 // optimized:
