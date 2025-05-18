@@ -2,6 +2,7 @@ package alpacadecimal
 
 import (
 	"database/sql/driver"
+	"io"
 	"math"
 	"math/big"
 	"regexp"
@@ -592,6 +593,11 @@ func (d Decimal) MarshalBinary() (data []byte, err error) {
 	return d.asFallback().MarshalBinary()
 }
 
+func (a Decimal) MarshalGQL(w io.Writer) {
+    j, _ := a.MarshalText()
+	_, _ = w.Write(j)
+}
+
 // optimized:
 func (d Decimal) MarshalJSON() ([]byte, error) {
 	var str string
@@ -1033,6 +1039,10 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+func (a *Decimal) UnmarshalGQL(v interface{}) error {
+	return a.Scan(v)
+}
+
 // optimized:
 // UnmarshalJSON implements the json.Unmarshaler interface.
 func (d *Decimal) UnmarshalJSON(decimalBytes []byte) error {
@@ -1112,6 +1122,12 @@ func NewNullDecimal(d Decimal) NullDecimal {
 	}
 }
 
+func (a NullDecimal) MarshalGQL(w io.Writer) {
+    j, _ := a.MarshalJSON()
+	_, _ = w.Write(j)
+}
+
+
 func (d NullDecimal) MarshalJSON() ([]byte, error) {
 	if !d.Valid {
 		return []byte("null"), nil
@@ -1133,6 +1149,10 @@ func (d *NullDecimal) Scan(value interface{}) error {
 	}
 	d.Valid = true
 	return d.Decimal.Scan(value)
+}
+
+func (a *NullDecimal) UnmarshalGQL(v interface{}) error {
+	return a.Scan(v)
 }
 
 func (d *NullDecimal) UnmarshalJSON(decimalBytes []byte) error {
