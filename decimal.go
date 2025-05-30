@@ -190,14 +190,22 @@ func NewFromFloat32(f float32) Decimal {
 	return newFromDecimal(decimal.NewFromFloat32(f))
 }
 
-// fallback:
+// optimized:
 // NewFromFloatWithExponent converts a float64 to Decimal, with an arbitrary
 // number of fractional digits.
 //
 // Example:
 //
 //	NewFromFloatWithExponent(123.456, -2).String() // output: "123.46"
+//
+// NOTE: this will panic on NaN, +/-inf
 func NewFromFloatWithExponent(value float64, exp int32) Decimal {
+	decimalPlaces := -exp // decimalPlaces could be 0..12 here, inclusive
+	formatted := strconv.FormatFloat(value, 'f', int(decimalPlaces), 64)
+	if fixed, ok := parseFixed([]byte(formatted)); ok {
+		return Decimal{fixed: fixed}
+	}
+
 	return newFromDecimal(decimal.NewFromFloatWithExponent(value, exp))
 }
 
