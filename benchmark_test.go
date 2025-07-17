@@ -6,6 +6,7 @@ import (
 
 	ericdecimal "github.com/ericlagergren/decimal"
 	ericpostgres "github.com/ericlagergren/decimal/sql/postgres"
+	"github.com/quagmt/udecimal"
 	"github.com/shopspring/decimal"
 
 	"github.com/alpacahq/alpacadecimal"
@@ -18,6 +19,7 @@ func BenchmarkValue(b *testing.B) {
 		var result driver.Value
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d.Value()
 		}
@@ -30,6 +32,7 @@ func BenchmarkValue(b *testing.B) {
 		var result driver.Value
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d.Value()
 		}
@@ -42,6 +45,7 @@ func BenchmarkValue(b *testing.B) {
 		var result driver.Value
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d.Value()
 		}
@@ -54,6 +58,7 @@ func BenchmarkValue(b *testing.B) {
 		var result driver.Value
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d.Value()
 		}
@@ -67,6 +72,20 @@ func BenchmarkValue(b *testing.B) {
 		var result driver.Value
 
 		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.Value()
+		}
+		_ = result
+	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		d := udecimal.MustFromUint64(123, 0)
+
+		var result driver.Value
+
+		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d.Value()
 		}
@@ -82,6 +101,7 @@ func BenchmarkAdd(b *testing.B) {
 		var result alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Add(d2)
 		}
@@ -95,6 +115,7 @@ func BenchmarkAdd(b *testing.B) {
 		var result decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Add(d2)
 		}
@@ -108,8 +129,23 @@ func BenchmarkAdd(b *testing.B) {
 		result := ericdecimal.New(0, 0)
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = result.Add(d1, d2)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		d1 := udecimal.MustFromInt64(1, 0)
+		d2 := udecimal.MustFromInt64(2, 0)
+
+		result := udecimal.Zero
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Add(d2)
 		}
 		_ = result
 	})
@@ -123,6 +159,7 @@ func BenchmarkSub(b *testing.B) {
 		var result alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Sub(d2)
 		}
@@ -136,6 +173,7 @@ func BenchmarkSub(b *testing.B) {
 		var result decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Sub(d2)
 		}
@@ -149,8 +187,23 @@ func BenchmarkSub(b *testing.B) {
 		result := ericdecimal.New(0, 0)
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = result.Sub(d1, d2)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		d1 := udecimal.MustFromInt64(1, 0)
+		d2 := udecimal.MustFromInt64(2, 0)
+
+		result := udecimal.Zero
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Sub(d2)
 		}
 		_ = result
 	})
@@ -161,6 +214,7 @@ func BenchmarkScan(b *testing.B) {
 
 	b.Run("alpacadecimal.Decimal", func(b *testing.B) {
 		var err error
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d alpacadecimal.Decimal
 			err = d.Scan(source)
@@ -170,6 +224,7 @@ func BenchmarkScan(b *testing.B) {
 
 	b.Run("decimal.Decimal", func(b *testing.B) {
 		var err error
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d decimal.Decimal
 			err = d.Scan(source)
@@ -179,8 +234,19 @@ func BenchmarkScan(b *testing.B) {
 
 	b.Run("eric.Decimal", func(b *testing.B) {
 		var err error
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d ericpostgres.Decimal
+			err = d.Scan(source)
+		}
+		_ = err
+	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		var err error
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d udecimal.Decimal
 			err = d.Scan(source)
 		}
 		_ = err
@@ -198,6 +264,7 @@ func BenchmarkMul(b *testing.B) {
 		var result alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Mul(d2)
 		}
@@ -211,6 +278,7 @@ func BenchmarkMul(b *testing.B) {
 		var result decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Mul(d2)
 		}
@@ -224,8 +292,23 @@ func BenchmarkMul(b *testing.B) {
 		result := ericdecimal.New(0, 0)
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = result.Mul(d1, d2)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		d1 := udecimal.MustFromFloat64(x)
+		d2 := udecimal.MustFromFloat64(y)
+
+		var result udecimal.Decimal
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Mul(d2)
 		}
 		_ = result
 	})
@@ -242,6 +325,7 @@ func BenchmarkDiv(b *testing.B) {
 		var result alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Div(d2)
 		}
@@ -255,6 +339,7 @@ func BenchmarkDiv(b *testing.B) {
 		var result decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Div(d2)
 		}
@@ -268,8 +353,23 @@ func BenchmarkDiv(b *testing.B) {
 		result := ericdecimal.New(0, 0)
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = result.Quo(d1, d2)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		d1 := udecimal.MustFromFloat64(x)
+		d2 := udecimal.MustFromFloat64(y)
+
+		var result udecimal.Decimal
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d1.Div(d2)
 		}
 		_ = result
 	})
@@ -284,6 +384,7 @@ func BenchmarkString(b *testing.B) {
 		var result string
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.String()
 		}
@@ -296,6 +397,7 @@ func BenchmarkString(b *testing.B) {
 		var result string
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.String()
 		}
@@ -308,11 +410,26 @@ func BenchmarkString(b *testing.B) {
 		var result string
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.String()
 		}
 		_ = result
 	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		d1 := udecimal.MustFromFloat64(x)
+
+		var result string
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.String()
+		}
+		_ = result
+	})
+
 }
 
 func BenchmarkRound(b *testing.B) {
@@ -324,6 +441,7 @@ func BenchmarkRound(b *testing.B) {
 		var result alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Round(2)
 		}
@@ -336,6 +454,7 @@ func BenchmarkRound(b *testing.B) {
 		var result decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Round(2)
 		}
@@ -348,11 +467,26 @@ func BenchmarkRound(b *testing.B) {
 		var result *ericdecimal.Big
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Round(2)
 		}
 		_ = result
 	})
+
+	b.Run("udecimal.Decimal", func(b *testing.B) {
+		d1 := udecimal.MustFromFloat64(x)
+
+		var result udecimal.Decimal
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.RoundBank(2)
+		}
+		_ = result
+	})
+
 }
 
 func BenchmarkNewFromDecimal(b *testing.B) {
@@ -404,6 +538,7 @@ func BenchmarkRoundUp(b *testing.B) {
 		var result1, result2, result3 alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundUp(i)
@@ -425,6 +560,7 @@ func BenchmarkRoundUp(b *testing.B) {
 		var result1, result2, result3, result4 alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundUp(i)
@@ -445,6 +581,7 @@ func BenchmarkRoundUp(b *testing.B) {
 		var result4 alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result4 = d4.RoundUp(i)
@@ -461,6 +598,7 @@ func BenchmarkRoundUp(b *testing.B) {
 		var result1, result2, result3 decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundUp(i)
@@ -482,6 +620,7 @@ func BenchmarkRoundUp(b *testing.B) {
 		var result1, result2, result3, result4 decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundUp(i)
@@ -502,11 +641,36 @@ func BenchmarkRoundUp(b *testing.B) {
 		var result4 decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result4 = d4.RoundUp(i)
 			}
 		}
+		_ = result4
+	})
+
+	b.Run("udecimal.Decimal with fallback", func(b *testing.B) {
+		d1 := udecimal.MustFromFloat64(x1)
+		d2 := udecimal.MustFromFloat64(x2)
+		d3 := udecimal.MustFromFloat64(x3)
+		d4 := udecimal.MustFromFloat64(x4)
+
+		var result1, result2, result3, result4 udecimal.Decimal
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for i := int32(-6); i <= 12; i++ {
+				result1 = d1.RoundHAZ(uint8(i))
+				result2 = d2.RoundHAZ(uint8(i))
+				result3 = d3.RoundHAZ(uint8(i))
+				result4 = d4.RoundHAZ(uint8(i))
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
 		_ = result4
 	})
 }
@@ -526,6 +690,7 @@ func BenchmarkRoundDown(b *testing.B) {
 		var result1, result2, result3 alpacadecimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundDown(i)
@@ -545,6 +710,7 @@ func BenchmarkRoundDown(b *testing.B) {
 		d4 := alpacadecimal.NewFromFloat(x4)
 		var result1, result2, result3, result4 alpacadecimal.Decimal
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundDown(i)
@@ -563,6 +729,7 @@ func BenchmarkRoundDown(b *testing.B) {
 		d4 := alpacadecimal.NewFromFloat(x4)
 		var result4 alpacadecimal.Decimal
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result4 = d4.RoundDown(i)
@@ -579,6 +746,7 @@ func BenchmarkRoundDown(b *testing.B) {
 		var result1, result2, result3 decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundDown(i)
@@ -600,6 +768,7 @@ func BenchmarkRoundDown(b *testing.B) {
 		var result1, result2, result3, result4 decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result1 = d1.RoundDown(i)
@@ -620,11 +789,36 @@ func BenchmarkRoundDown(b *testing.B) {
 		var result4 decimal.Decimal
 
 		b.ResetTimer()
+		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			for i := int32(-6); i <= 12; i++ {
 				result4 = d4.RoundDown(i)
 			}
 		}
+		_ = result4
+	})
+
+	b.Run("udecimal.Decimal with fallback", func(b *testing.B) {
+		d1 := udecimal.MustFromFloat64(x1)
+		d2 := udecimal.MustFromFloat64(x2)
+		d3 := udecimal.MustFromFloat64(x3)
+		d4 := udecimal.MustFromFloat64(x4)
+
+		var result1, result2, result3, result4 udecimal.Decimal
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for i := int32(-6); i <= 12; i++ {
+				result1 = d1.RoundHTZ(uint8(i))
+				result2 = d2.RoundHTZ(uint8(i))
+				result3 = d3.RoundHTZ(uint8(i))
+				result4 = d4.RoundHTZ(uint8(i))
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
 		_ = result4
 	})
 }
