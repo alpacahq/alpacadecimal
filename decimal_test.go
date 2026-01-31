@@ -544,6 +544,27 @@ func TestDecimal(t *testing.T) {
 		})
 	})
 
+	t.Run("Decimal.CopySign", func(t *testing.T) {
+		n := alpacadecimal.NewFromInt(-1)
+		z := alpacadecimal.NewFromInt(0)
+		p := alpacadecimal.NewFromInt(1)
+
+		a := alpacadecimal.NewFromInt(3)
+		shouldEqual(t, a.CopySign(n), a.Neg())
+		shouldEqual(t, a.CopySign(z), a)
+		shouldEqual(t, a.CopySign(p), a)
+
+		b := alpacadecimal.NewFromInt(0)
+		shouldEqual(t, b.CopySign(n), b)
+		shouldEqual(t, b.CopySign(z), b)
+		shouldEqual(t, b.CopySign(p), b)
+
+		c := alpacadecimal.NewFromInt(-3)
+		shouldEqual(t, c.CopySign(n), c)
+		shouldEqual(t, c.CopySign(z), c.Neg())
+		shouldEqual(t, c.CopySign(p), c.Neg())
+	})
+
 	t.Run("Decimal.GobDecode & Decimal.GobEncode", func(t *testing.T) {
 		x := alpacadecimal.NewFromInt(123456)
 		data, err := x.GobEncode()
