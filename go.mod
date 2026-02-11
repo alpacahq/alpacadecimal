@@ -1,10 +1,12 @@
 module github.com/alpacahq/alpacadecimal
 
-go 1.18
+go 1.23
+
+toolchain go1.24.5
 
 require (
-	github.com/shopspring/decimal v1.4.0
-	github.com/stretchr/testify v1.10.0
+	github.com/quagmt/udecimal v1.9.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
