@@ -11,8 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	alpaca "github.com/alpacahq/alpacadecimal"
 	shopspring "github.com/shopspring/decimal"
+
+	alpaca "github.com/alpacahq/alpacadecimal"
 )
 
 // maxPrec is the maximum precision udecimal supports.
@@ -101,6 +102,16 @@ func fracDigitsOf(s string) int {
 	return 0
 }
 
+// maxAbsValue is the maximum absolute value allowed for fuzz inputs.
+// 34 quintillion (34e18) keeps values within udecimal's representable range
+// and avoids triggering the 200-character string length limit in udecimal.Parse.
+var maxAbsValue = alpaca.RequireFromString("34000000000000000000")
+
+// inRange checks if d is within [-34e18, 34e18].
+func inRange(d alpaca.Decimal) bool {
+	return d.Abs().LessThanOrEqual(maxAbsValue)
+}
+
 func FuzzArithmetic(f *testing.F) {
 	seeds := []string{
 		"0", "1", "-1", "0.5", "-0.5",
@@ -115,6 +126,13 @@ func FuzzArithmetic(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aStr, bStr string) {
+		// Skip inputs exceeding udecimal's 19-digit fractional precision.
+		// alpacadecimal truncates to 19 digits while shopspring keeps full precision,
+		// so results would diverge beyond that limit.
+		if fracDigitsOf(aStr) > maxPrec || fracDigitsOf(bStr) > maxPrec {
+			return
+		}
+
 		a, errA := alpaca.NewFromString(aStr)
 		shopA, errSA := shopspring.NewFromString(aStr)
 		if errA != nil || errSA != nil {
@@ -124,6 +142,10 @@ func FuzzArithmetic(f *testing.F) {
 		b, errB := alpaca.NewFromString(bStr)
 		shopB, errSB := shopspring.NewFromString(bStr)
 		if errB != nil || errSB != nil {
+			return
+		}
+
+		if !inRange(a) || !inRange(b) {
 			return
 		}
 
@@ -230,11 +252,17 @@ func FuzzRounding(f *testing.F) {
 		if places < -5 || places > 18 {
 			return
 		}
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
 		p := int32(places)
 
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -277,11 +305,17 @@ func FuzzStringFixed(f *testing.F) {
 		if places < 0 || places > 18 {
 			return
 		}
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
 		p := int32(places)
 
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -303,9 +337,16 @@ func FuzzIntrospection(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, s string) {
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
+
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -418,6 +459,10 @@ func FuzzComparisons(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aStr, bStr string) {
+		if fracDigitsOf(aStr) > maxPrec || fracDigitsOf(bStr) > maxPrec {
+			return
+		}
+
 		a, errA := alpaca.NewFromString(aStr)
 		shopA, errSA := shopspring.NewFromString(aStr)
 		if errA != nil || errSA != nil {
@@ -426,6 +471,9 @@ func FuzzComparisons(f *testing.F) {
 		b, errB := alpaca.NewFromString(bStr)
 		shopB, errSB := shopspring.NewFromString(bStr)
 		if errB != nil || errSB != nil {
+			return
+		}
+		if !inRange(a) || !inRange(b) {
 			return
 		}
 
@@ -462,9 +510,16 @@ func FuzzCeilFloor(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, s string) {
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
+
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -559,7 +614,8 @@ func FuzzNewFromFloat32(f *testing.F) {
 		if !safeCall(func() { a = alpaca.NewFromFloat32(v) }) {
 			return
 		}
-		s := shopspring.NewFromFloat32(v)
+		// shopspring can have more precision than udecimal's 19 digits
+		s := shopspring.NewFromFloat32(v).Truncate(19)
 		compare(t, fmt.Sprintf("NewFromFloat32(%v)", v), a, s)
 	})
 }
@@ -576,10 +632,16 @@ func FuzzShift(f *testing.F) {
 		if shift < -8 || shift > 8 {
 			return
 		}
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
 
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -611,6 +673,10 @@ func FuzzPow(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, baseStr, expStr string) {
+		if fracDigitsOf(baseStr) > maxPrec || fracDigitsOf(expStr) > maxPrec {
+			return
+		}
+
 		base, errA := alpaca.NewFromString(baseStr)
 		shopBase, errSA := shopspring.NewFromString(baseStr)
 		if errA != nil || errSA != nil {
@@ -619,6 +685,9 @@ func FuzzPow(f *testing.F) {
 		exp, errB := alpaca.NewFromString(expStr)
 		shopExp, errSB := shopspring.NewFromString(expStr)
 		if errB != nil || errSB != nil {
+			return
+		}
+		if !inRange(base) || !inRange(exp) {
 			return
 		}
 
@@ -664,6 +733,9 @@ func FuzzDivRound(f *testing.F) {
 		if prec < 0 || prec > 16 {
 			return
 		}
+		if fracDigitsOf(aStr) > maxPrec || fracDigitsOf(bStr) > maxPrec {
+			return
+		}
 		p := int32(prec)
 
 		a, errA := alpaca.NewFromString(aStr)
@@ -674,6 +746,9 @@ func FuzzDivRound(f *testing.F) {
 		b, errB := alpaca.NewFromString(bStr)
 		shopB, errSB := shopspring.NewFromString(bStr)
 		if errB != nil || errSB != nil {
+			return
+		}
+		if !inRange(a) || !inRange(b) {
 			return
 		}
 		if b.IsZero() {
@@ -698,6 +773,9 @@ func FuzzQuoRem(f *testing.F) {
 		if prec < 0 || prec > 16 {
 			return
 		}
+		if fracDigitsOf(aStr) > maxPrec || fracDigitsOf(bStr) > maxPrec {
+			return
+		}
 		p := int32(prec)
 
 		a, errA := alpaca.NewFromString(aStr)
@@ -708,6 +786,9 @@ func FuzzQuoRem(f *testing.F) {
 		b, errB := alpaca.NewFromString(bStr)
 		shopB, errSB := shopspring.NewFromString(bStr)
 		if errB != nil || errSB != nil {
+			return
+		}
+		if !inRange(a) || !inRange(b) {
 			return
 		}
 		if b.IsZero() {
@@ -740,6 +821,10 @@ func FuzzAggregates(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, aStr, bStr string) {
+		if fracDigitsOf(aStr) > maxPrec || fracDigitsOf(bStr) > maxPrec {
+			return
+		}
+
 		a, errA := alpaca.NewFromString(aStr)
 		shopA, errSA := shopspring.NewFromString(aStr)
 		if errA != nil || errSA != nil {
@@ -748,6 +833,9 @@ func FuzzAggregates(f *testing.F) {
 		b, errB := alpaca.NewFromString(bStr)
 		shopB, errSB := shopspring.NewFromString(bStr)
 		if errB != nil || errSB != nil {
+			return
+		}
+		if !inRange(a) || !inRange(b) {
 			return
 		}
 
@@ -779,6 +867,9 @@ func FuzzExponentCoefficient(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		a, errA := alpaca.NewFromString(s)
 		if errA != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 		// Also check shopspring can parse it (filters junk inputs)
@@ -816,9 +907,16 @@ func FuzzBigIntBigFloatRat(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, s string) {
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
+
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -876,11 +974,17 @@ func FuzzStringFormats(f *testing.F) {
 		if places < 0 || places > 18 {
 			return
 		}
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
 		p := int32(places)
 
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -912,10 +1016,16 @@ func FuzzRoundCash(f *testing.F) {
 		default:
 			return
 		}
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
 
 		a, errA := alpaca.NewFromString(s)
 		shopD, errS := shopspring.NewFromString(s)
 		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -996,6 +1106,9 @@ func FuzzSerialization(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		a, err := alpaca.NewFromString(s)
 		if err != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -1130,6 +1243,9 @@ func FuzzNullDecimal(f *testing.F) {
 		if err != nil {
 			return
 		}
+		if !inRange(d) {
+			return
+		}
 		nd := alpaca.NewNullDecimal(d)
 		if !nd.Valid {
 			t.Errorf("NewNullDecimal(%s): Valid should be true", s)
@@ -1200,6 +1316,9 @@ func FuzzRequireFromString(f *testing.F) {
 			}()
 			return
 		}
+		if !inRange(d) {
+			return
+		}
 
 		// RequireFromString should not panic and match NewFromString
 		r := alpaca.RequireFromString(s)
@@ -1221,6 +1340,9 @@ func FuzzGetFixedIsOptimized(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		a, err := alpaca.NewFromString(s)
 		if err != nil {
+			return
+		}
+		if !inRange(a) {
 			return
 		}
 
@@ -1269,6 +1391,9 @@ func FuzzNewFromFormattedString(f *testing.F) {
 		if errE != nil {
 			return
 		}
+		if !inRange(expected) {
+			return
+		}
 
 		regexpSep, regErr := regexp.Compile(regexp.QuoteMeta(sep))
 		if regErr != nil {
@@ -1293,6 +1418,9 @@ func FuzzScanTypes(f *testing.F) {
 	f.Fuzz(func(t *testing.T, s string) {
 		expected, err := alpaca.NewFromString(s)
 		if err != nil {
+			return
+		}
+		if !inRange(expected) {
 			return
 		}
 

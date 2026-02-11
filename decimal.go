@@ -91,7 +91,12 @@ type Decimal struct {
 // optimized:
 // Avg returns the average value of the provided first and rest Decimals
 func Avg(first Decimal, rest ...Decimal) Decimal {
-	return Sum(first, rest...).Div(NewFromInt(int64(1 + len(rest))))
+	divisor := NewFromInt(int64(1 + len(rest)))
+	sum := first.Div(divisor)
+	for _, item := range rest {
+		sum = sum.Add(item.Div(divisor))
+	}
+	return sum
 }
 
 // optimized:
