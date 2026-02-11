@@ -431,7 +431,6 @@ func BenchmarkString(b *testing.B) {
 		}
 		_ = result
 	})
-
 }
 
 func BenchmarkRound(b *testing.B) {
@@ -488,7 +487,6 @@ func BenchmarkRound(b *testing.B) {
 		}
 		_ = result
 	})
-
 }
 
 //func BenchmarkNewFromDecimal(b *testing.B) {

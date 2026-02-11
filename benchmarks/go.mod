@@ -10,3 +10,5 @@ require (
 	github.com/quagmt/udecimal v1.9.0
 	github.com/shopspring/decimal v1.4.0
 )
+
+replace github.com/alpacahq/alpacadecimal => ../
