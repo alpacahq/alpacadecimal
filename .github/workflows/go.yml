@@ -2,6 +2,12 @@ name: Go
 
 on: [push]
 
+concurrency:
+  # One active run per workflow + branch
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,9 +16,9 @@ jobs:
         go-version: [ '1.18', '1.19']
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v5
       with:
         go-version: ${{ matrix.go-version }}
 

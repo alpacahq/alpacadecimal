@@ -1,3 +1,5 @@
+.PHONY: all clean gen-asm clear-asm test bench bench-x view-bench-cpu-result view-bench-mem-result clean-up
+
 gen-asm:
 	go build -x -n -v *.go 2>&1 | sed -n "/^# import config/,/EOF$$/p" |grep -v EOF > importcfg
 	go tool compile -importcfg importcfg -S decimal.go > decimal.s
@@ -11,13 +13,16 @@ test:
 	go test .
 
 bench:
-	go test -bench=. --cpuprofile profile.out --memprofile memprofile.out
+	$(MAKE) -C benchmarks bench
 
 bench-x:
-	go test -bench=Mul --cpuprofile profile.out --memprofile memprofile.out -benchtime 10s
+	$(MAKE) -C benchmarks bench-x
 
 view-bench-cpu-result:
-	go tool pprof -http=":8000" profile.out
+	$(MAKE) -C benchmarks view-bench-cpu-result
 
 view-bench-mem-result:
-	go tool pprof -http=":8000" memprofile.out
+	$(MAKE) -C benchmarks view-bench-mem-result
+
+clean-up:
+	$(MAKE) -C benchmarks clean-up
