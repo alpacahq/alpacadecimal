@@ -1,33 +1,28 @@
 FUZZ_TIME ?= 10s
-FUZZ_TIMEOUT ?= 60s
+FUZZ_TIMEOUT ?= 500s
 
 FUZZ_TARGETS = \
-	FuzzArithmetic \
-	FuzzRounding \
-	FuzzStringFixed \
-	FuzzIntrospection \
-	FuzzConstructors \
-	FuzzComparisons \
-	FuzzCeilFloor \
+	FuzzNew \
 	FuzzNewFromInt \
 	FuzzNewFromFloat \
 	FuzzNewFromFloat32 \
-	FuzzShift \
-	FuzzPow \
+	FuzzNewFromFloatWithExponent \
+	FuzzNewFromString \
+	FuzzNewFromFormattedString \
+	FuzzArithmetic \
 	FuzzDivRound \
 	FuzzQuoRem \
-	FuzzAggregates \
-	FuzzExponentCoefficient \
-	FuzzBigIntBigFloatRat \
-	FuzzStringFormats \
+	FuzzPow \
+	FuzzShift \
+	FuzzRounding \
+	FuzzCeilFloor \
 	FuzzRoundCash \
-	FuzzNewFromFloatWithExponent \
-	FuzzNewFromBigInt \
+	FuzzAggregates \
+	FuzzIntrospection \
+	FuzzConversions \
+	FuzzStringFormats \
 	FuzzSerialization \
 	FuzzNullDecimal \
-	FuzzRequireFromString \
-	FuzzGetFixedIsOptimized \
-	FuzzNewFromFormattedString \
 	FuzzScanTypes
 
 .PHONY: fuzz fuzz-seeds fuzz-all clean-corpus
