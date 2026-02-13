@@ -32,6 +32,10 @@ FUZZ_TARGETS = \
 
 .PHONY: fuzz fuzz-seeds fuzz-all clean-corpus
 
+update-vendor:
+	go mod tidy
+	go mod vendor
+
 # Run all fuzz target seeds as regular tests (fast sanity check)
 fuzz-seeds:
 	go test -run "Fuzz" -count=1 -timeout $(FUZZ_TIMEOUT)
@@ -44,7 +48,7 @@ fuzz-all:
 	done
 
 # Alias: run seeds then fuzz all
-fuzz: fuzz-seeds fuzz-all
+fuzz: update-vendor fuzz-seeds fuzz-all
 
 # Remove cached fuzz corpus
 clean-corpus:
