@@ -503,36 +503,6 @@ func (d Decimal) DivRound(d2 Decimal, prec int32) Decimal {
 	return NewFromUDecimal(rounded)
 }
 
-// divRoundBigInt implements DivRound using big.Int for precision outside 0..19.
-func divRoundBigInt(fb1, fb2 udecimal.Decimal, prec int32) Decimal {
-	num, p1 := parseToBigIntAndPrec(fb1.String())
-	den, p2 := parseToBigIntAndPrec(fb2.String())
-
-	scaleExp := int64(prec) + 1 + int64(p2) - int64(p1)
-	if scaleExp > 0 {
-		scaleFactor := new(big.Int).Exp(big.NewInt(10), big.NewInt(scaleExp), nil)
-		num.Mul(num, scaleFactor)
-	} else if scaleExp < 0 {
-		scaleFactor := new(big.Int).Exp(big.NewInt(10), big.NewInt(-scaleExp), nil)
-		den.Mul(den, scaleFactor)
-	}
-
-	q, _ := new(big.Int).QuoRem(num, den, new(big.Int))
-
-	isNeg := q.Sign() < 0
-	aq := new(big.Int).Abs(q)
-	lastDigit := new(big.Int).Mod(aq, big.NewInt(10)).Int64()
-	aq.Div(aq, big.NewInt(10))
-	if lastDigit >= 5 {
-		aq.Add(aq, big.NewInt(1))
-	}
-	if isNeg {
-		aq.Neg(aq)
-	}
-
-	return bigIntToDecimalWithPrec(aq, prec)
-}
-
 // optimized:
 // Equal returns whether the numbers represented by d and d2 are equal.
 func (d Decimal) Equal(d2 Decimal) bool {
@@ -619,8 +589,7 @@ func (d Decimal) GreaterThanOrEqual(d2 Decimal) bool {
 // InexactFloat64 returns the nearest float64 value for d.
 // It doesn't indicate if the returned value represents d exactly.
 func (d Decimal) InexactFloat64() float64 {
-	f, _ := strconv.ParseFloat(d.String(), 64)
-	return f
+	return d.asFallback().InexactFloat64()
 }
 
 // optimized:
