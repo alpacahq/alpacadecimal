@@ -1147,7 +1147,7 @@ func BenchmarkAbs(b *testing.B) {
 func BenchmarkCmp(b *testing.B) {
 	b.Run("alpacadecimal/optimized", func(b *testing.B) {
 		d1 := alpacadecimal.NewFromFloat(1234.56)
-		d2 := alpacadecimal.NewFromFloat(7890.12)
+		d2 := alpacadecimal.NewFromFloat(7890.124)
 		var result int
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1159,7 +1159,7 @@ func BenchmarkCmp(b *testing.B) {
 
 	b.Run("alpacadecimal/fallback", func(b *testing.B) {
 		d1 := alpacadecimal.RequireFromString("123456789.123")
-		d2 := alpacadecimal.RequireFromString("223456789.123")
+		d2 := alpacadecimal.RequireFromString("223456789.1234")
 		var result int
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1171,7 +1171,7 @@ func BenchmarkCmp(b *testing.B) {
 
 	b.Run("alpacadecimal/mixed", func(b *testing.B) {
 		d1 := alpacadecimal.NewFromFloat(1234.56)
-		d2 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("123456789.1234")
 		var result int
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1183,7 +1183,7 @@ func BenchmarkCmp(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d1 := decimal.RequireFromString("123456789.123")
-		d2 := decimal.RequireFromString("223456789.123")
+		d2 := decimal.RequireFromString("22345678.1234")
 		var result int
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1195,7 +1195,7 @@ func BenchmarkCmp(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
-		d2 := udecimal.MustParse("223456789.123")
+		d2 := udecimal.MustParse("22345678.1234")
 		var result int
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1221,7 +1221,7 @@ func BenchmarkEqual(b *testing.B) {
 
 	b.Run("alpacadecimal/fallback", func(b *testing.B) {
 		d1 := alpacadecimal.RequireFromString("123456789.123")
-		d2 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1233,7 +1233,7 @@ func BenchmarkEqual(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d1 := decimal.RequireFromString("123456789.123")
-		d2 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1245,7 +1245,7 @@ func BenchmarkEqual(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
-		d2 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1271,7 +1271,7 @@ func BenchmarkGreaterThan(b *testing.B) {
 
 	b.Run("alpacadecimal/fallback", func(b *testing.B) {
 		d1 := alpacadecimal.RequireFromString("223456789.123")
-		d2 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1283,7 +1283,7 @@ func BenchmarkGreaterThan(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d1 := decimal.RequireFromString("223456789.123")
-		d2 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1295,7 +1295,7 @@ func BenchmarkGreaterThan(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("223456789.123")
-		d2 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1321,7 +1321,7 @@ func BenchmarkGreaterThanOrEqual(b *testing.B) {
 
 	b.Run("alpacadecimal/fallback", func(b *testing.B) {
 		d1 := alpacadecimal.RequireFromString("123456789.123")
-		d2 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1333,7 +1333,7 @@ func BenchmarkGreaterThanOrEqual(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d1 := decimal.RequireFromString("123456789.123")
-		d2 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1345,7 +1345,7 @@ func BenchmarkGreaterThanOrEqual(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("223456789.123")
-		d2 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1371,7 +1371,7 @@ func BenchmarkLessThan(b *testing.B) {
 
 	b.Run("alpacadecimal/fallback", func(b *testing.B) {
 		d1 := alpacadecimal.RequireFromString("123456789.123")
-		d2 := alpacadecimal.RequireFromString("223456789.123")
+		d2 := alpacadecimal.RequireFromString("223456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1383,7 +1383,7 @@ func BenchmarkLessThan(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d1 := decimal.RequireFromString("123456789.123")
-		d2 := decimal.RequireFromString("223456789.123")
+		d2 := decimal.RequireFromString("223456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1395,7 +1395,7 @@ func BenchmarkLessThan(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
-		d2 := udecimal.MustParse("223456789.123")
+		d2 := udecimal.MustParse("223456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1421,7 +1421,7 @@ func BenchmarkLessThanOrEqual(b *testing.B) {
 
 	b.Run("alpacadecimal/fallback", func(b *testing.B) {
 		d1 := alpacadecimal.RequireFromString("123456789.123")
-		d2 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1433,7 +1433,7 @@ func BenchmarkLessThanOrEqual(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d1 := decimal.RequireFromString("123456789.123")
-		d2 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1445,7 +1445,7 @@ func BenchmarkLessThanOrEqual(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
-		d2 := udecimal.MustParse("223456789.123")
+		d2 := udecimal.MustParse("223456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
