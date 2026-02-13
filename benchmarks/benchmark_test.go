@@ -5,10 +5,10 @@ package benchmarks
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"math/big"
+	"regexp"
 	"testing"
 
-	ericdecimal "github.com/ericlagergren/decimal"
-	ericpostgres "github.com/ericlagergren/decimal/sql/postgres"
 	"github.com/quagmt/udecimal"
 	"github.com/shopspring/decimal"
 
@@ -30,6 +30,44 @@ import (
 // ---------------------------------------------------------------------------
 // Constructors
 // ---------------------------------------------------------------------------
+
+func BenchmarkNew(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.New(12345, -2)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.New(123456789123, -3)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		var result decimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.New(123456789123, -3)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		var result udecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = udecimal.MustFromInt64(123456789123, 3)
+		}
+		_ = result
+	})
+}
 
 func BenchmarkNewFromString(b *testing.B) {
 	b.Run("alpacadecimal/optimized_small", func(b *testing.B) {
@@ -125,8 +163,75 @@ func BenchmarkNewFromFloat(b *testing.B) {
 	})
 }
 
+func BenchmarkNewFromFloat32(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromFloat32(1234.56)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromFloat32(123456789.0)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		var result decimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.NewFromFloat32(123456789.0)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		var result udecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = udecimal.NewFromFloat64(float64(float32(123456789.0)))
+		}
+		_ = result
+	})
+}
+
+func BenchmarkNewFromFloatWithExponent(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromFloatWithExponent(1234.56, -2)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromFloatWithExponent(123456789.123, -3)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		var result decimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.NewFromFloatWithExponent(123456789.123, -3)
+		}
+		_ = result
+	})
+}
+
 func BenchmarkNewFromInt(b *testing.B) {
-	b.Run("alpacadecimal", func(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
 		var result alpacadecimal.Decimal
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
@@ -158,6 +263,332 @@ func BenchmarkNewFromInt(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = udecimal.MustFromInt64(123456789, 0)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkNewFromInt32(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromInt32(12345)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromInt32(123456789)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		var result decimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.NewFromInt32(123456789)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		var result udecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = udecimal.MustFromInt64(123456789, 0)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkNewFromBigInt(b *testing.B) {
+	smallBI := big.NewInt(12345)
+	largeBI := big.NewInt(123456789123)
+
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromBigInt(smallBI, -2)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.NewFromBigInt(largeBI, -3)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		var result decimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.NewFromBigInt(largeBI, -3)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkNewFromFormattedString(b *testing.B) {
+	re := regexp.MustCompile(",")
+
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = alpacadecimal.NewFromFormattedString("1,234.56", re)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		var result alpacadecimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = alpacadecimal.NewFromFormattedString("123,456,789.123", re)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		var result decimal.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = decimal.NewFromFormattedString("123,456,789.123", re)
+		}
+		_ = result
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate Functions
+// ---------------------------------------------------------------------------
+
+func BenchmarkSum(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(1.23)
+		d2 := alpacadecimal.NewFromFloat(4.56)
+		d3 := alpacadecimal.NewFromFloat(7.89)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Sum(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d1 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("223456789.123")
+		d3 := alpacadecimal.RequireFromString("323456789.123")
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Sum(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d1 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("223456789.123")
+		d3 := decimal.RequireFromString("323456789.123")
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.Sum(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d1 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("223456789.123")
+		d3 := udecimal.MustParse("323456789.123")
+		var result udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for _, item := range []udecimal.Decimal{d1, d2, d3} {
+				result = result.Add(item)
+			}
+		}
+		_ = result
+	})
+}
+
+func BenchmarkMin(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(1.23)
+		d2 := alpacadecimal.NewFromFloat(4.56)
+		d3 := alpacadecimal.NewFromFloat(7.89)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Min(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d1 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("223456789.123")
+		d3 := alpacadecimal.RequireFromString("323456789.123")
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Min(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d1 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("223456789.123")
+		d3 := decimal.RequireFromString("323456789.123")
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.Min(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d1 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("223456789.123")
+		d3 := udecimal.MustParse("323456789.123")
+		var result udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = udecimal.Min(d1, d2, d3)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkMax(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(1.23)
+		d2 := alpacadecimal.NewFromFloat(4.56)
+		d3 := alpacadecimal.NewFromFloat(7.89)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Max(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d1 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("223456789.123")
+		d3 := alpacadecimal.RequireFromString("323456789.123")
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Max(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d1 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("223456789.123")
+		d3 := decimal.RequireFromString("323456789.123")
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = decimal.Max(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d1 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("223456789.123")
+		d3 := udecimal.MustParse("323456789.123")
+		var result udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = udecimal.Max(d1, d2, d3)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkAvg(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(1.23)
+		d2 := alpacadecimal.NewFromFloat(4.56)
+		d3 := alpacadecimal.NewFromFloat(7.89)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Avg(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d1 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("223456789.123")
+		d3 := alpacadecimal.RequireFromString("323456789.123")
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = alpacadecimal.Avg(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d1 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("223456789.123")
+		d3 := decimal.RequireFromString("323456789.123")
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = udecimal.S(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d1 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("223456789.123")
+		d3 := udecimal.MustParse("323456789.123")
+		var result udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for _, item := range []udecimal.Decimal{d1, d2, d3} {
+				result = result.Add(item)
+			}
+			result, _ = result.Div(udecimal.MustFromInt64(3, 0))
 		}
 		_ = result
 	})
@@ -200,18 +631,6 @@ func BenchmarkAdd(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Add(d2)
-		}
-		_ = result
-	})
-
-	b.Run("eric", func(b *testing.B) {
-		d1 := ericdecimal.New(123456789123, 3)
-		d2 := ericdecimal.New(223456789123, 3)
-		result := ericdecimal.New(0, 0)
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result = result.Add(d1, d2)
 		}
 		_ = result
 	})
@@ -266,18 +685,6 @@ func BenchmarkSub(b *testing.B) {
 		_ = result
 	})
 
-	b.Run("eric", func(b *testing.B) {
-		d1 := ericdecimal.New(789012, 2)
-		d2 := ericdecimal.New(123456, 2)
-		result := ericdecimal.New(0, 0)
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result = result.Sub(d1, d2)
-		}
-		_ = result
-	})
-
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("223456789.123")
 		d2 := udecimal.MustParse("123456789.123")
@@ -328,18 +735,6 @@ func BenchmarkMul(b *testing.B) {
 		_ = result
 	})
 
-	b.Run("eric", func(b *testing.B) {
-		d1 := ericdecimal.New(123, 2)
-		d2 := ericdecimal.New(2, 0)
-		result := ericdecimal.New(0, 0)
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result = result.Mul(d1, d2)
-		}
-		_ = result
-	})
-
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
 		d2 := udecimal.MustParse("3.14")
@@ -386,18 +781,6 @@ func BenchmarkDiv(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Div(d2)
-		}
-		_ = result
-	})
-
-	b.Run("eric", func(b *testing.B) {
-		d1 := ericdecimal.New(123, 2)
-		d2 := ericdecimal.New(2, 0)
-		result := ericdecimal.New(0, 0)
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result = result.Quo(d1, d2)
 		}
 		_ = result
 	})
@@ -511,6 +894,155 @@ func BenchmarkMod(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d1.Mod(d2)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkPow(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1.5)
+		exp := alpacadecimal.NewFromInt(3)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Pow(exp)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		exp := alpacadecimal.NewFromInt(2)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Pow(exp)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		exp := decimal.NewFromInt(2)
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Pow(exp)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d := udecimal.MustParse("123456789.123")
+		var result udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.PowInt32(2)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkQuoRem(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(123.456)
+		d2 := alpacadecimal.NewFromFloat(7.0)
+		var q, r alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			q, r = d1.QuoRem(d2, 4)
+		}
+		_ = q
+		_ = r
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d1 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("7.0")
+		var q, r alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			q, r = d1.QuoRem(d2, 4)
+		}
+		_ = q
+		_ = r
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d1 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("7.0")
+		var q, r decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			q, r = d1.QuoRem(d2, 4)
+		}
+		_ = q
+		_ = r
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d1 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("7.0")
+		var q, r udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			q, r, _ = d1.QuoRem(d2)
+		}
+		_ = q
+		_ = r
+	})
+}
+
+func BenchmarkShift(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1.23)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Shift(2)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Shift(2)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Shift(2)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d := udecimal.MustParse("123456789.123")
+		var result udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Mul(udecimal.MustFromUint64(1, 2))
 		}
 		_ = result
 	})
@@ -774,6 +1306,56 @@ func BenchmarkGreaterThan(b *testing.B) {
 	})
 }
 
+func BenchmarkGreaterThanOrEqual(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(1234.56)
+		d2 := alpacadecimal.NewFromFloat(1234.56)
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.GreaterThanOrEqual(d2)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d1 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.GreaterThanOrEqual(d2)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d1 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.GreaterThanOrEqual(d2)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d1 := udecimal.MustParse("223456789.123")
+		d2 := udecimal.MustParse("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.GreaterThanOrEqual(d2)
+		}
+		_ = result
+	})
+}
+
 func BenchmarkLessThan(b *testing.B) {
 	b.Run("alpacadecimal/optimized", func(b *testing.B) {
 		d1 := alpacadecimal.NewFromFloat(1234.56)
@@ -819,6 +1401,56 @@ func BenchmarkLessThan(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.LessThan(d2)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkLessThanOrEqual(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d1 := alpacadecimal.NewFromFloat(1234.56)
+		d2 := alpacadecimal.NewFromFloat(1234.56)
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.LessThanOrEqual(d2)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d1 := alpacadecimal.RequireFromString("123456789.123")
+		d2 := alpacadecimal.RequireFromString("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.LessThanOrEqual(d2)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d1 := decimal.RequireFromString("123456789.123")
+		d2 := decimal.RequireFromString("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.LessThanOrEqual(d2)
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d1 := udecimal.MustParse("123456789.123")
+		d2 := udecimal.MustParse("223456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.LessThanOrEqual(d2)
 		}
 		_ = result
 	})
@@ -920,6 +1552,122 @@ func BenchmarkIsZero(b *testing.B) {
 	})
 }
 
+func BenchmarkIsPositive(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsPositive()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsPositive()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsPositive()
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d := udecimal.MustParse("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsPos()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkIsNegative(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(-1234.56)
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsNegative()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("-123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsNegative()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("-123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsNegative()
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d := udecimal.MustParse("-123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsNeg()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkIsInteger(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsInteger()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsInteger()
+		}
+		_ = result
+	})
+}
+
 func BenchmarkIntPart(b *testing.B) {
 	b.Run("alpacadecimal/optimized", func(b *testing.B) {
 		d := alpacadecimal.NewFromFloat(1234.56)
@@ -966,6 +1714,356 @@ func BenchmarkIntPart(b *testing.B) {
 	})
 }
 
+func BenchmarkNumDigits(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.NumDigits()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.NumDigits()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.NumDigits()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkExponent(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result int32
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Exponent()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result int32
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Exponent()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result int32
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Exponent()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkCoefficient(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result *big.Int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Coefficient()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result *big.Int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Coefficient()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result *big.Int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Coefficient()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkCoefficientInt64(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result int64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.CoefficientInt64()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result int64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.CoefficientInt64()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result int64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.CoefficientInt64()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkFloat64(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.Float64()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.Float64()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.Float64()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkInexactFloat64(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.InexactFloat64()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.InexactFloat64()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.InexactFloat64()
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d := udecimal.MustParse("123456789.123")
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.InexactFloat64()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkBigInt(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result *big.Int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.BigInt()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result *big.Int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.BigInt()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result *big.Int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.BigInt()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkBigFloat(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result *big.Float
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.BigFloat()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result *big.Float
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.BigFloat()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result *big.Float
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.BigFloat()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkRat(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result *big.Rat
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Rat()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result *big.Rat
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Rat()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkCopy(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Copy()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Copy()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Copy()
+		}
+		_ = result
+	})
+}
+
 // ---------------------------------------------------------------------------
 // Rounding
 // ---------------------------------------------------------------------------
@@ -1004,24 +2102,13 @@ func BenchmarkRound(b *testing.B) {
 		_ = result
 	})
 
-	b.Run("eric", func(b *testing.B) {
-		d := ericdecimal.New(10000000123456, 6)
-		var result *ericdecimal.Big
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result = d.Round(2)
-		}
-		_ = result
-	})
-
 	b.Run("udecimal", func(b *testing.B) {
 		d := udecimal.MustParse("10000000.123456")
 		var result udecimal.Decimal
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			result = d.RoundBank(2)
+			result = d.RoundAwayFromZero(2)
 		}
 		_ = result
 	})
@@ -1068,6 +2155,41 @@ func BenchmarkRoundBank(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.RoundBank(2)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkRoundCash(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1.23456)
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.RoundCash(5)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("10000000.123456")
+		var result alpacadecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.RoundCash(5)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("10000000.123456")
+		var result decimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.RoundCash(5)
 		}
 		_ = result
 	})
@@ -1525,17 +2647,6 @@ func BenchmarkString(b *testing.B) {
 		_ = result
 	})
 
-	b.Run("eric", func(b *testing.B) {
-		d := ericdecimal.New(123, 2)
-		var result string
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result = d.String()
-		}
-		_ = result
-	})
-
 	b.Run("udecimal", func(b *testing.B) {
 		d := udecimal.MustParse("123456789.123")
 		var result string
@@ -1594,6 +2705,76 @@ func BenchmarkStringFixed(b *testing.B) {
 	})
 }
 
+func BenchmarkStringFixedBank(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1.23456)
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.StringFixedBank(2)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("10000000.123456")
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.StringFixedBank(2)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("10000000.123456")
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.StringFixedBank(2)
+		}
+		_ = result
+	})
+}
+
+func BenchmarkStringFixedCash(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1.23456)
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.StringFixedCash(5)
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("10000000.123456")
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.StringFixedCash(5)
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("10000000.123456")
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.StringFixedCash(5)
+		}
+		_ = result
+	})
+}
+
 // ---------------------------------------------------------------------------
 // SQL / Serialization
 // ---------------------------------------------------------------------------
@@ -1634,18 +2815,6 @@ func BenchmarkValue(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d := decimal.RequireFromString("123456789.123")
-		var result driver.Value
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result, _ = d.Value()
-		}
-		_ = result
-	})
-
-	b.Run("eric", func(b *testing.B) {
-		v := ericdecimal.New(123, 0)
-		d := ericpostgres.Decimal{V: v}
 		var result driver.Value
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1699,17 +2868,6 @@ func BenchmarkScan(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d decimal.Decimal
-			err = d.Scan(small)
-		}
-		_ = err
-	})
-
-	b.Run("eric", func(b *testing.B) {
-		var err error
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			var d ericpostgres.Decimal
 			err = d.Scan(small)
 		}
 		_ = err
@@ -1857,5 +3015,192 @@ func BenchmarkMarshalText(b *testing.B) {
 			result, _ = d.MarshalText()
 		}
 		_ = result
+	})
+}
+
+func BenchmarkUnmarshalText(b *testing.B) {
+	small := []byte("1234.56")
+	large := []byte("123456789.123")
+
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d alpacadecimal.Decimal
+			_ = d.UnmarshalText(small)
+		}
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d alpacadecimal.Decimal
+			_ = d.UnmarshalText(large)
+		}
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d decimal.Decimal
+			_ = d.UnmarshalText(large)
+		}
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d udecimal.Decimal
+			_ = d.UnmarshalText(large)
+		}
+	})
+}
+
+func BenchmarkMarshalBinary(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.MarshalBinary()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.MarshalBinary()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.MarshalBinary()
+		}
+		_ = result
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		d := udecimal.MustParse("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.MarshalBinary()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkUnmarshalBinary(b *testing.B) {
+	optData, _ := alpacadecimal.NewFromFloat(1234.56).MarshalBinary()
+	fbData, _ := alpacadecimal.RequireFromString("123456789.123").MarshalBinary()
+	ssData, _ := decimal.RequireFromString("123456789.123").MarshalBinary()
+	udData, _ := udecimal.MustParse("123456789.123").MarshalBinary()
+
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d alpacadecimal.Decimal
+			_ = d.UnmarshalBinary(optData)
+		}
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d alpacadecimal.Decimal
+			_ = d.UnmarshalBinary(fbData)
+		}
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d decimal.Decimal
+			_ = d.UnmarshalBinary(ssData)
+		}
+	})
+
+	b.Run("udecimal", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d udecimal.Decimal
+			_ = d.UnmarshalBinary(udData)
+		}
+	})
+}
+
+func BenchmarkGobEncode(b *testing.B) {
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		d := alpacadecimal.NewFromFloat(1234.56)
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.GobEncode()
+		}
+		_ = result
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		d := alpacadecimal.RequireFromString("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.GobEncode()
+		}
+		_ = result
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		d := decimal.RequireFromString("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.GobEncode()
+		}
+		_ = result
+	})
+}
+
+func BenchmarkGobDecode(b *testing.B) {
+	optData, _ := alpacadecimal.NewFromFloat(1234.56).GobEncode()
+	fbData, _ := alpacadecimal.RequireFromString("123456789.123").GobEncode()
+	ssData, _ := decimal.RequireFromString("123456789.123").GobEncode()
+
+	b.Run("alpacadecimal/optimized", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d alpacadecimal.Decimal
+			_ = d.GobDecode(optData)
+		}
+	})
+
+	b.Run("alpacadecimal/fallback", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d alpacadecimal.Decimal
+			_ = d.GobDecode(fbData)
+		}
+	})
+
+	b.Run("shopspring", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d decimal.Decimal
+			_ = d.GobDecode(ssData)
+		}
 	})
 }
