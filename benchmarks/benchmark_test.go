@@ -572,7 +572,7 @@ func BenchmarkAvg(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			result = udecimal.S(d1, d2, d3)
+			result = decimal.Avg(d1, d2, d3)
 		}
 		_ = result
 	})
