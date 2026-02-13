@@ -98,9 +98,9 @@ func SetDefaultPrecision(prec uint8) {
 
 // Variables
 var (
-	DivisionPrecision        = 16
-	MarshalJSONWithoutQuotes = false
-	Zero                     = Decimal{fixed: 0}
+	DivisionPrecision        int32 = 16
+	MarshalJSONWithoutQuotes       = false
+	Zero                           = Decimal{fixed: 0}
 )
 
 type Decimal struct {
@@ -414,6 +414,9 @@ func (d Decimal) Coefficient() *big.Int {
 	if !d.hasFallback {
 		return big.NewInt(d.fixed)
 	}
+
+	// TODO: Look at this again
+
 	// For fallback, compute coefficient from string.
 	// The coefficient must satisfy: value = coefficient * 10^Exponent().
 	// Exponent() returns -PrecUint(), so we need exactly PrecUint() fractional
@@ -450,6 +453,13 @@ func (d Decimal) Coefficient() *big.Int {
 	return bi
 }
 
+func (d Decimal) Rescale() Decimal {
+	if !d.hasFallback {
+		return d
+	}
+	return NewFromUDecimal(d.fallback)
+}
+
 // optimized:
 // CoefficientInt64 returns the coefficient of the decimal as int64. It is scaled by 10^Exponent()
 func (d Decimal) CoefficientInt64() int64 {
@@ -478,7 +488,7 @@ func (d Decimal) Div(d2 Decimal) Decimal {
 			return Decimal{fixed: fixed}
 		}
 	}
-	return d.DivRound(d2, 16)
+	return d.DivRound(d2, DivisionPrecision)
 }
 
 // fallback:
@@ -753,55 +763,14 @@ func (d Decimal) Pow(d2 Decimal) Decimal {
 // QuoRem does divsion with remainder
 func (d Decimal) QuoRem(d2 Decimal, prec int32) (Decimal, Decimal) {
 	// Reimplement with big.Int to support the precision parameter
-	fb1 := d.asFallback()
-	fb2 := d2.asFallback()
-	if fb2.IsZero() {
-		panic("decimal division by zero")
+	fb1 := d.asFallback().Trunc(uint8(prec))
+	fb2 := d2.asFallback().Trunc(uint8(prec))
+	qDec, rDec, err := fb1.QuoRem(fb2)
+	if err != nil {
+		panic(fmt.Sprintf("decimal QuoRem error: %v", err))
 	}
 
-	// Parse both to big.Int coefficients
-	s1 := fb1.String()
-	s2 := fb2.String()
-
-	num, p1 := parseToBigIntAndPrec(s1)
-	den, p2 := parseToBigIntAndPrec(s2)
-
-	// Align scales: both need to be at max(p1, p2) + prec
-	targetScale := int64(prec)
-	if targetScale < 0 {
-		targetScale = 0
-	}
-	// Align numerator and denominator to same scale, then add prec extra digits to numerator
-	commonPrec := p1
-	if p2 > commonPrec {
-		commonPrec = p2
-	}
-	// Scale num to commonPrec + prec, den to commonPrec
-	numScale := int64(commonPrec) - int64(p1) + targetScale
-	denScale := int64(commonPrec) - int64(p2)
-
-	if numScale > 0 {
-		num.Mul(num, new(big.Int).Exp(big.NewInt(10), big.NewInt(numScale), nil))
-	}
-	if denScale > 0 {
-		den.Mul(den, new(big.Int).Exp(big.NewInt(10), big.NewInt(denScale), nil))
-	}
-
-	q, r := new(big.Int).QuoRem(num, den, new(big.Int))
-
-	// q is the quotient with `prec` decimal places
-	// r is the remainder with `commonPrec + prec` decimal places
-	// But remainder should satisfy: d = q * d2 + r
-	// where q has `prec` decimal places
-
-	qDec := bigIntToDecimalWithPrec(q, prec)
-	// Remainder: r has (commonPrec + prec) implicit decimal places
-	// but we need remainder = d - q * d2
-	// Remainder scale = commonPrec + prec
-	remPrec := int32(commonPrec) + prec
-	rDec := bigIntToDecimalWithPrec(r, remPrec)
-
-	return qDec, rDec
+	return NewFromUDecimal(qDec), NewFromUDecimal(rDec)
 }
 
 // fallback:
