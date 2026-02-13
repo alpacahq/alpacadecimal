@@ -1,6 +1,7 @@
 .PHONY: bench bench-x view-bench-cpu-result view-bench-mem-result clean-up
 
 bench:
+	go mod tidy && go mod vendor
 	go test -bench=. --cpuprofile profile.out --memprofile memprofile.out
 
 bench-x:
