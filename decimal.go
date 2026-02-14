@@ -375,11 +375,7 @@ func (d Decimal) BigFloat() *big.Float {
 // fallback:
 // BigInt returns integer component of the decimal as a BigInt.
 func (d Decimal) BigInt() *big.Int {
-	s := d.Truncate(0).String()
-	// Remove any decimal point (e.g. "123." or "123.000" after truncation)
-	if idx := strings.IndexByte(s, '.'); idx >= 0 {
-		s = s[:idx]
-	}
+	s := d.Truncate(0).StringFixed(0)
 	bi := new(big.Int)
 	bi.SetString(s, 10)
 	return bi
@@ -428,8 +424,31 @@ func (d Decimal) Coefficient() *big.Int {
 		return big.NewInt(d.fixed)
 	}
 
-	// TODO: Look at this again
+	neg, hi, lo, _, ok := d.fallback.ToHiLo()
+	if ok {
+		// u128 path: construct big.Int from hi:lo directly
+		bi := new(big.Int)
+		if hi == 0 {
+			// Fits in a single uint64 — cheapest path
+			bi.SetUint64(lo)
+		} else {
+			// Combine hi and lo into a 128-bit big.Int
+			bi.SetUint64(hi)
+			bi.Lsh(bi, 64)
+			bi.Or(bi, new(big.Int).SetUint64(lo))
+		}
+		if neg {
+			bi.Neg(bi)
+		}
+		return bi
+	}
 
+	// bigInt overflow path — fall back to string parsing
+	// (this is the rare case)
+	return d.coefficientFromString()
+}
+
+func (d Decimal) coefficientFromString() *big.Int {
 	// For fallback, compute coefficient from string.
 	// The coefficient must satisfy: value = coefficient * 10^Exponent().
 	// Exponent() returns -PrecUint(), so we need exactly PrecUint() fractional
@@ -466,20 +485,28 @@ func (d Decimal) Coefficient() *big.Int {
 	return bi
 }
 
-func (d Decimal) Rescale() Decimal {
-	if !d.hasFallback {
-		return d
-	}
-	return NewFromUDecimal(d.fallback)
-}
-
 // optimized:
 // CoefficientInt64 returns the coefficient of the decimal as int64. It is scaled by 10^Exponent()
 func (d Decimal) CoefficientInt64() int64 {
 	if !d.hasFallback {
 		return d.fixed
 	}
+	neg, hi, lo, _, ok := d.fallback.ToHiLo()
+	if ok && hi == 0 && lo <= math.MaxInt64 {
+		if neg {
+			return -int64(lo)
+		}
+		return int64(lo)
+	}
+	// Fall back to big.Int path only when truly needed
 	return d.Coefficient().Int64()
+}
+
+func (d Decimal) Rescale() Decimal {
+	if !d.hasFallback {
+		return d
+	}
+	return NewFromUDecimal(d.fallback)
 }
 
 // optimized:
