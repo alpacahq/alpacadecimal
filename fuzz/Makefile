@@ -1,0 +1,51 @@
+FUZZ_TIME ?= 10s
+FUZZ_TIMEOUT ?= 500s
+
+FUZZ_TARGETS = \
+	FuzzNew \
+	FuzzNewFromInt \
+	FuzzNewFromFloat \
+	FuzzNewFromFloat32 \
+	FuzzNewFromFloatWithExponent \
+	FuzzNewFromString \
+	FuzzNewFromFormattedString \
+	FuzzArithmetic \
+	FuzzDivRound \
+	FuzzQuoRem \
+	FuzzPow \
+	FuzzShift \
+	FuzzRounding \
+	FuzzRoundDown \
+	FuzzCeilFloor \
+	FuzzRoundCash \
+	FuzzAggregates \
+	FuzzIntrospection \
+	FuzzConversions \
+	FuzzStringFormats \
+	FuzzSerialization \
+	FuzzNullDecimal \
+	FuzzScanTypes
+
+.PHONY: fuzz fuzz-seeds fuzz-all clean-corpus
+
+update-vendor:
+	go mod tidy
+	go mod vendor
+
+# Run all fuzz target seeds as regular tests (fast sanity check)
+fuzz-seeds:
+	go test -run "Fuzz" -count=1 -timeout $(FUZZ_TIMEOUT)
+
+# Fuzz all targets sequentially for FUZZ_TIME each
+fuzz-all:
+	@for target in $(FUZZ_TARGETS); do \
+		echo "=== Fuzzing $$target for $(FUZZ_TIME) ==="; \
+		go test -fuzz="^$${target}$$" -fuzztime=$(FUZZ_TIME) -timeout $(FUZZ_TIMEOUT) || exit 1; \
+	done
+
+# Alias: run seeds then fuzz all
+fuzz: update-vendor fuzz-seeds fuzz-all
+
+# Remove cached fuzz corpus
+clean-corpus:
+	-rm -rf testdata/fuzz
