@@ -743,8 +743,7 @@ func (d Decimal) Neg() Decimal {
 	if !d.hasFallback {
 		return Decimal{fixed: -d.fixed}
 	}
-	d.fallback = d.fallback.Neg()
-	return d
+	return newFromFallback(d.fallback.Neg())
 }
 
 // fallback:
