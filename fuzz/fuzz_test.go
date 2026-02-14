@@ -230,8 +230,8 @@ func FuzzNewFromFloat(f *testing.F) {
 	f.Add(-123.456)
 	f.Add(0.000000001)
 	f.Add(999999.999999)
-	f.Add(9223372.0)  // optimized boundary
-	f.Add(9223373.0)  // fallback
+	f.Add(9223372.0) // optimized boundary
+	f.Add(9223373.0) // fallback
 	f.Add(1e12)
 	f.Add(-1e12)
 
@@ -441,10 +441,10 @@ func FuzzArithmetic(f *testing.F) {
 		"0", "1", "-1", "0.5", "-0.5",
 		"123.456", "-123.456",
 		"0.000000001", "-0.000000001",
-		"0.000000000001",            // 12 fractional digits: optimized boundary
-		"9223372", "-9223372",       // max optimized integer
-		"9223372.000000000001",      // max optimized value
-		"9223373", "-9223373",       // forces fallback
+		"0.000000000001",      // 12 fractional digits: optimized boundary
+		"9223372", "-9223372", // max optimized integer
+		"9223372.000000000001", // max optimized value
+		"9223373", "-9223373",  // forces fallback
 		"9999999.999999999",         // large fractional
 		"1000000000", "-1000000000", // large integer, fallback
 	}
@@ -580,11 +580,33 @@ func FuzzDivRound(f *testing.F) {
 }
 
 // FuzzQuoRem tests QuoRem (division with remainder).
+//
+// Validated properties:
+//  1. Cross-library: quotient and remainder match shopspring.
+//  2. Invariant: q * d2 + r == d (the fundamental quotient-remainder identity).
+//  3. Remainder bound: |r| < |d2| * 10^(-prec) (remainder is strictly smaller
+//     than one unit in the last quotient digit).
+//  4. Sign: remainder has the same sign as the dividend (truncated division).
 func FuzzQuoRem(f *testing.F) {
-	seeds := []string{"1", "3", "7", "10", "123.456", "-123.456"}
+	seeds := []string{
+		"0", "1", "-1", "0.5", "-0.5",
+		"3", "-3", "7", "-7", "10", "-10",
+		"123.456", "-123.456",
+		"0.000000001", "-0.000000001",
+		"0.000000000001",      // 12 fractional digits: optimized boundary
+		"9223372", "-9223372", // max optimized integer
+		"9223372.000000000001", // max optimized value
+		"9223373", "-9223373",  // forces fallback
+		"1000000000", "-1000000000", // large fallback
+		"0.1", "0.01", "0.001",
+		"999999.999999",
+	}
+	precs := []int8{0, 1, 2, 4, 8, 12, 16}
 	for _, a := range seeds {
 		for _, b := range seeds {
-			f.Add(a, b, int8(4))
+			for _, p := range precs {
+				f.Add(a, b, p)
+			}
 		}
 	}
 
@@ -611,6 +633,19 @@ func FuzzQuoRem(f *testing.F) {
 			return
 		}
 
+		// Zero dividend: quotient and remainder must both be zero regardless of
+		// precision. Verify this explicitly before the general path.
+		if a.IsZero() {
+			aQ, aR := a.QuoRem(b, p)
+			if !aQ.IsZero() {
+				t.Errorf("QuoRem_q(0, %s, %d): expected 0, got %s", bStr, p, aQ.String())
+			}
+			if !aR.IsZero() {
+				t.Errorf("QuoRem_r(0, %s, %d): expected 0, got %s", bStr, p, aR.String())
+			}
+			return
+		}
+
 		// The remainder has commonPrec + prec implicit decimal places.
 		// Skip when this exceeds 19 to avoid divergence at the precision boundary.
 		maxFrac := fracDigitsOf(bStr)
@@ -623,8 +658,47 @@ func FuzzQuoRem(f *testing.F) {
 
 		aQ, aR := a.QuoRem(b, p)
 		sQ, sR := shopA.QuoRem(shopB, p)
+
+		// Property 1: cross-library agreement.
 		compare(t, fmt.Sprintf("QuoRem_q(%s, %s, %d)", aStr, bStr, p), aQ, sQ)
 		compare(t, fmt.Sprintf("QuoRem_r(%s, %s, %d)", aStr, bStr, p), aR, sR)
+
+		// Property 2: quotient-remainder identity q * d2 + r == d.
+		// Use truncated comparison because q * d2 multiplication may introduce
+		// rounding noise beyond 19 fractional digits.
+		reconstructed := aQ.Mul(b).Add(aR)
+		if !reconstructed.Equal(a) {
+			// Allow for truncation artifacts: compare truncated to maxPrec.
+			rTrunc := trimTrailing(reconstructed.Truncate(maxPrec).String())
+			aTrunc := trimTrailing(a.Truncate(maxPrec).String())
+			if rTrunc != aTrunc {
+				t.Errorf("QuoRem invariant q*d2+r==d failed for (%s, %s, %d): q=%s r=%s reconstructed=%s original=%s",
+					aStr, bStr, p, aQ.String(), aR.String(), reconstructed.String(), a.String())
+			}
+		}
+
+		// Property 3: |r| < |d2| * 10^(-prec), i.e. remainder is smaller than
+		// one unit in the last place of the quotient.
+		// Expressed equivalently: |r| * 10^prec < |d2|.
+		if !aR.IsZero() {
+			rScaled := aR.Abs().Shift(p)
+			if rScaled.GreaterThanOrEqual(b.Abs()) {
+				t.Errorf("QuoRem remainder bound violated for (%s, %s, %d): |r|=%s |d2|=%s |r|*10^%d=%s",
+					aStr, bStr, p, aR.Abs().String(), b.Abs().String(), p, rScaled.String())
+			}
+		}
+
+		// Property 4: remainder sign matches dividend sign (truncated division).
+		if !aR.IsZero() {
+			if a.IsPositive() && aR.IsNegative() {
+				t.Errorf("QuoRem sign mismatch for (%s, %s, %d): positive dividend but negative remainder %s",
+					aStr, bStr, p, aR.String())
+			}
+			if a.IsNegative() && aR.IsPositive() {
+				t.Errorf("QuoRem sign mismatch for (%s, %s, %d): negative dividend but positive remainder %s",
+					aStr, bStr, p, aR.String())
+			}
+		}
 	})
 }
 
@@ -748,9 +822,9 @@ func FuzzRounding(f *testing.F) {
 		"0", "1.5", "-1.5", "2.5", "-2.5",
 		"1.45", "1.55", "123.456", "-123.456",
 		"0.999", "-0.999", "1.005", "99.995",
-		"9223372", "-9223372",       // optimized boundary
-		"9223372.5", "-9223372.5",   // optimized with rounding
-		"9223373", "-9223373",       // fallback
+		"9223372", "-9223372", // optimized boundary
+		"9223372.5", "-9223372.5", // optimized with rounding
+		"9223373", "-9223373", // fallback
 		"1000000000", "-1000000000", // large fallback
 	}
 	for _, s := range seeds {
@@ -791,6 +865,65 @@ func FuzzRounding(f *testing.F) {
 		// valid interpretations; we test only the common ground.
 		if p >= 0 {
 			compare(t, fmt.Sprintf("Truncate(%s, %d)", s, p), a.Truncate(p), shopD.Truncate(p))
+		}
+	})
+}
+
+// FuzzRoundDown tests RoundDown (truncation towards zero) in isolation.
+//
+// Validated properties:
+//  1. Cross-library: result matches shopspring.
+//  2. Idempotence: RoundDown(RoundDown(d, p), p) == RoundDown(d, p).
+//  3. Towards zero: |RoundDown(d, p)| <= |d|.
+func FuzzRoundDown(f *testing.F) {
+	seeds := []string{
+		"0", "1", "-1", "0.5", "-0.5",
+		"1.1001", "-1.1001", "1.999", "-1.999",
+		"123.456", "-123.456",
+		"454545.454545", "-454545.454545",
+		"0.001", "-0.001",
+		"99", "-99", "545", "-545",
+		"9223372.999", "-9223372.999", // optimized boundary
+		"9223373.999", "-9223373.999", // fallback
+	}
+	for _, s := range seeds {
+		for places := int8(-5); places <= 10; places++ {
+			f.Add(s, places)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, s string, places int8) {
+		if places < -5 || places > 18 {
+			return
+		}
+		if fracDigitsOf(s) > maxPrec {
+			return
+		}
+		p := int32(places)
+
+		a, errA := alpaca.NewFromString(s)
+		shopD, errS := shopspring.NewFromString(s)
+		if errA != nil || errS != nil {
+			return
+		}
+		if !inRange(a) {
+			return
+		}
+
+		rd := a.RoundDown(p)
+
+		// Property 1: cross-library agreement.
+		compare(t, fmt.Sprintf("RoundDown(%s, %d)", s, p), rd, shopD.RoundDown(p))
+
+		// Property 2: idempotence.
+		rd2 := rd.RoundDown(p)
+		if !rd2.Equal(rd) {
+			t.Errorf("RoundDown idempotence(%s, %d): first=%s second=%s", s, p, rd.String(), rd2.String())
+		}
+
+		// Property 3: towards zero — |result| <= |original|.
+		if rd.Abs().GreaterThan(a.Abs()) {
+			t.Errorf("RoundDown towards zero(%s, %d): |%s| > |%s|", s, p, rd.String(), a.String())
 		}
 	})
 }
@@ -924,11 +1057,11 @@ func FuzzIntrospection(f *testing.F) {
 	for _, s := range []string{
 		"0", "1", "-1", "1.5", "-1.5",
 		"100", "0.001",
-		"9223372", "-9223372",       // max optimized integer
-		"9223372.000000000001",      // max optimized value
-		"9223373", "-9223373",       // forces fallback
+		"9223372", "-9223372", // max optimized integer
+		"9223372.000000000001", // max optimized value
+		"9223373", "-9223373",  // forces fallback
 		"9999999999", "-9999999999", // large fallback
-		"0.1234567890123456789",     // 19 fractional digits
+		"0.1234567890123456789", // 19 fractional digits
 	} {
 		f.Add(s)
 	}

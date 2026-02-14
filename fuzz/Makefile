@@ -15,6 +15,7 @@ FUZZ_TARGETS = \
 	FuzzPow \
 	FuzzShift \
 	FuzzRounding \
+	FuzzRoundDown \
 	FuzzCeilFloor \
 	FuzzRoundCash \
 	FuzzAggregates \

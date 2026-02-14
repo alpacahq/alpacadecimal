@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/quagmt/udecimal"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/alpacahq/alpacadecimal"
@@ -86,7 +87,7 @@ func TestDecimal(t *testing.T) {
 		require.True(t, alpacadecimal.Zero.LessThan(alpacadecimal.NewFromInt(1)))
 	})
 
-t.Run("Avg", func(t *testing.T) {
+	t.Run("Avg", func(t *testing.T) {
 		shouldEqual(t, alpacadecimal.Avg(one, two, three), two)
 	})
 
@@ -297,14 +298,6 @@ t.Run("Avg", func(t *testing.T) {
 		require.True(t, one.Add(two).Equal(three))
 	})
 
-	t.Run("Decimal.BigFloat", func(t *testing.T) {
-		// Verify BigFloat returns correct values
-		bf := alpacadecimal.RequireFromString("123.456").BigFloat()
-		require.NotNil(t, bf)
-		f, _ := bf.Float64()
-		require.InDelta(t, 123.456, f, 0.0001)
-	})
-
 	t.Run("Decimal.BigInt", func(t *testing.T) {
 		// Verify BigInt returns correct integer parts
 		require.Equal(t, "123", alpacadecimal.RequireFromString("123.456").BigInt().String())
@@ -407,9 +400,127 @@ t.Run("Avg", func(t *testing.T) {
 	})
 
 	t.Run("Decimal.Float64", func(t *testing.T) {
-		f, exact := alpacadecimal.RequireFromString("1.0").Float64()
+		// Float64 defines "exact" via round-trip: d → float64 → FormatFloat → NewFromString → Equal(d).
+		// A value is exact when the float64 → string → decimal round-trip recovers the original.
+		// A value is inexact when the decimal has more precision than float64 can carry,
+		// so the round-trip produces a different (shorter) decimal.
+
+		// --- Exact cases: round-trip preserves the value ---
+
+		// Zero
+		f, exact := alpacadecimal.RequireFromString("0").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(0), f)
+
+		// Positive and negative integers
+		f, exact = alpacadecimal.RequireFromString("1").Float64()
 		require.True(t, exact)
 		require.Equal(t, float64(1), f)
+
+		f, exact = alpacadecimal.RequireFromString("-1").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(-1), f)
+
+		f, exact = alpacadecimal.RequireFromString("1000000").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(1000000), f)
+
+		// Trailing zeros
+		f, exact = alpacadecimal.RequireFromString("1.0").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(1), f)
+
+		// Dyadic fractions (exact in IEEE 754)
+		f, exact = alpacadecimal.RequireFromString("0.5").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(0.5), f)
+
+		f, exact = alpacadecimal.RequireFromString("0.25").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(0.25), f)
+
+		f, exact = alpacadecimal.RequireFromString("0.125").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(0.125), f)
+
+		f, exact = alpacadecimal.RequireFromString("-0.75").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(-0.75), f)
+
+		f, exact = alpacadecimal.RequireFromString("1.5").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(1.5), f)
+
+		f, exact = alpacadecimal.RequireFromString("-2.25").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(-2.25), f)
+
+		// Non-dyadic but short enough that FormatFloat round-trips cleanly
+		f, exact = alpacadecimal.RequireFromString("0.1").Float64()
+		require.True(t, exact)
+		require.InDelta(t, 0.1, f, 1e-15)
+
+		f, exact = alpacadecimal.RequireFromString("-0.1").Float64()
+		require.True(t, exact)
+		require.InDelta(t, -0.1, f, 1e-15)
+
+		f, exact = alpacadecimal.RequireFromString("0.3").Float64()
+		require.True(t, exact)
+		require.InDelta(t, 0.3, f, 1e-15)
+
+		f, exact = alpacadecimal.RequireFromString("1.1").Float64()
+		require.True(t, exact)
+		require.InDelta(t, 1.1, f, 1e-15)
+
+		f, exact = alpacadecimal.RequireFromString("-3.3").Float64()
+		require.True(t, exact)
+		require.InDelta(t, -3.3, f, 1e-15)
+
+		f, exact = alpacadecimal.RequireFromString("123.456").Float64()
+		require.True(t, exact)
+		require.InDelta(t, 123.456, f, 1e-12)
+
+		// Boundary: optimized/fallback edge
+		f, exact = alpacadecimal.RequireFromString("9223372").Float64()
+		require.True(t, exact)
+		require.Equal(t, float64(9223372), f)
+
+		// --- Inexact cases: decimal has more precision than float64 can carry ---
+		// The float64 round-trip produces a shorter decimal that differs from the original.
+
+		// 17+ fractional digits — float64 collapses 0.10000000000000001 to 0.1
+		f, exact = alpacadecimal.RequireFromString("0.10000000000000001").Float64()
+		require.False(t, exact)
+		require.InDelta(t, 0.1, f, 1e-15)
+
+		f, exact = alpacadecimal.RequireFromString("-0.10000000000000001").Float64()
+		require.False(t, exact)
+		require.InDelta(t, -0.1, f, 1e-15)
+
+		// 18 significant digits — last digits lost
+		f, exact = alpacadecimal.RequireFromString("1.12345678901234567").Float64()
+		require.False(t, exact)
+		require.InDelta(t, 1.12345678901234567, f, 1e-15)
+
+		// Integer + excessive fractional precision
+		f, exact = alpacadecimal.RequireFromString("1.00000000000000001").Float64()
+		require.False(t, exact)
+		require.InDelta(t, 1.0, f, 1e-15)
+
+		// Near-2 value that float64 collapses to 2
+		f, exact = alpacadecimal.RequireFromString("1.9999999999999999").Float64()
+		require.False(t, exact)
+		require.InDelta(t, 2.0, f, 1e-15)
+
+		// Large integer + fractional tail — too many significant digits
+		f, exact = alpacadecimal.RequireFromString("123456789.123456789").Float64()
+		require.False(t, exact)
+		require.InDelta(t, 123456789.123456789, f, 1e-7)
+
+		// Negative high-precision
+		f, exact = alpacadecimal.RequireFromString("-99.999999999999999").Float64()
+		require.False(t, exact)
+		require.InDelta(t, -100.0, f, 1e-13)
 	})
 
 	t.Run("Decimal.Floor", func(t *testing.T) {
@@ -620,12 +731,117 @@ t.Run("Avg", func(t *testing.T) {
 	})
 
 	t.Run("Decimal.QuoRem", func(t *testing.T) {
-		// Basic quorem test
-		a := alpacadecimal.RequireFromString("10")
-		b := alpacadecimal.RequireFromString("3")
-		q, r := a.QuoRem(b, 0)
-		require.Equal(t, "3", q.String())
-		require.Equal(t, "1", r.String())
+		tests := []struct {
+			name  string
+			a, b  string
+			prec  int32
+			wantQ string
+			wantR string
+		}{
+			// --- Basic integer division ---
+			{name: "10/3 prec=0", a: "10", b: "3", prec: 0, wantQ: "3", wantR: "1"},
+			{name: "10/3 prec=1", a: "10", b: "3", prec: 1, wantQ: "3.3", wantR: "0.1"},
+			{name: "10/3 prec=4", a: "10", b: "3", prec: 4, wantQ: "3.3333", wantR: "0.0001"},
+			{name: "10/5 exact", a: "10", b: "5", prec: 0, wantQ: "2", wantR: "0"},
+			{name: "7/2 prec=0", a: "7", b: "2", prec: 0, wantQ: "3", wantR: "1"},
+			{name: "7/2 prec=1", a: "7", b: "2", prec: 1, wantQ: "3.5", wantR: "0"},
+			{name: "100/7 prec=0", a: "100", b: "7", prec: 0, wantQ: "14", wantR: "2"},
+			{name: "100/7 prec=2", a: "100", b: "7", prec: 2, wantQ: "14.28", wantR: "0.04"},
+
+			// --- Zero dividend ---
+			{name: "0/1 prec=0", a: "0", b: "1", prec: 0, wantQ: "0", wantR: "0"},
+			{name: "0/1 prec=5", a: "0", b: "1", prec: 5, wantQ: "0", wantR: "0"},
+			{name: "0/123.456 prec=3", a: "0", b: "123.456", prec: 3, wantQ: "0", wantR: "0"},
+
+			// --- Dividend smaller than divisor ---
+			{name: "1/3 prec=0", a: "1", b: "3", prec: 0, wantQ: "0", wantR: "1"},
+			{name: "1/3 prec=2", a: "1", b: "3", prec: 2, wantQ: "0.33", wantR: "0.01"},
+			{name: "1/7 prec=4", a: "1", b: "7", prec: 4, wantQ: "0.1428", wantR: "0.0004"},
+			{name: "1/10 prec=0", a: "1", b: "10", prec: 0, wantQ: "0", wantR: "1"},
+			{name: "1/10 prec=1", a: "1", b: "10", prec: 1, wantQ: "0.1", wantR: "0"},
+
+			// --- Negative dividend ---
+			{name: "-10/3 prec=0", a: "-10", b: "3", prec: 0, wantQ: "-3", wantR: "-1"},
+			{name: "-10/3 prec=1", a: "-10", b: "3", prec: 1, wantQ: "-3.3", wantR: "-0.1"},
+			{name: "-7/2 prec=0", a: "-7", b: "2", prec: 0, wantQ: "-3", wantR: "-1"},
+			{name: "-7/2 prec=1", a: "-7", b: "2", prec: 1, wantQ: "-3.5", wantR: "0"},
+			{name: "-1/3 prec=2", a: "-1", b: "3", prec: 2, wantQ: "-0.33", wantR: "-0.01"},
+
+			// --- Negative divisor ---
+			{name: "10/-3 prec=0", a: "10", b: "-3", prec: 0, wantQ: "-3", wantR: "1"},
+			{name: "10/-3 prec=1", a: "10", b: "-3", prec: 1, wantQ: "-3.3", wantR: "0.1"},
+			{name: "7/-2 prec=1", a: "7", b: "-2", prec: 1, wantQ: "-3.5", wantR: "0"},
+
+			// --- Both negative ---
+			{name: "-10/-3 prec=0", a: "-10", b: "-3", prec: 0, wantQ: "3", wantR: "-1"},
+			{name: "-10/-3 prec=1", a: "-10", b: "-3", prec: 1, wantQ: "3.3", wantR: "-0.1"},
+			{name: "-7/-2 prec=1", a: "-7", b: "-2", prec: 1, wantQ: "3.5", wantR: "0"},
+
+			// --- Fractional operands ---
+			{name: "1.5/0.5 prec=0", a: "1.5", b: "0.5", prec: 0, wantQ: "3", wantR: "0"},
+			{name: "1.5/0.7 prec=0", a: "1.5", b: "0.7", prec: 0, wantQ: "2", wantR: "0.1"},
+			{name: "1.5/0.7 prec=2", a: "1.5", b: "0.7", prec: 2, wantQ: "2.14", wantR: "0.002"},
+			{name: "123.456/7.89 prec=2", a: "123.456", b: "7.89", prec: 2, wantQ: "15.64", wantR: "0.0564"},
+			{name: "0.001/0.003 prec=0", a: "0.001", b: "0.003", prec: 0, wantQ: "0", wantR: "0.001"},
+			{name: "0.001/0.003 prec=2", a: "0.001", b: "0.003", prec: 2, wantQ: "0.33", wantR: "0.00001"},
+
+			// --- Divisor equals 1 ---
+			{name: "123.456/1 prec=0", a: "123.456", b: "1", prec: 0, wantQ: "123", wantR: "0.456"},
+			{name: "123.456/1 prec=2", a: "123.456", b: "1", prec: 2, wantQ: "123.45", wantR: "0.006"},
+			{name: "123.456/1 prec=3", a: "123.456", b: "1", prec: 3, wantQ: "123.456", wantR: "0"},
+
+			// --- Self-division ---
+			{name: "7/7 prec=0", a: "7", b: "7", prec: 0, wantQ: "1", wantR: "0"},
+			{name: "123.456/123.456 prec=0", a: "123.456", b: "123.456", prec: 0, wantQ: "1", wantR: "0"},
+			{name: "123.456/123.456 prec=5", a: "123.456", b: "123.456", prec: 5, wantQ: "1", wantR: "0"},
+
+			// --- Optimized boundary (integer part 9223372, up to 12 frac digits) ---
+			{name: "9223372/1 prec=0", a: "9223372", b: "1", prec: 0, wantQ: "9223372", wantR: "0"},
+			{name: "9223372/3 prec=0", a: "9223372", b: "3", prec: 0, wantQ: "3074457", wantR: "1"},
+			{name: "9223372/3 prec=2", a: "9223372", b: "3", prec: 2, wantQ: "3074457.33", wantR: "0.01"},
+
+			// --- Fallback range (>9223372) ---
+			{name: "9223373/3 prec=0", a: "9223373", b: "3", prec: 0, wantQ: "3074457", wantR: "2"},
+			{name: "1000000000/7 prec=0", a: "1000000000", b: "7", prec: 0, wantQ: "142857142", wantR: "6"},
+			{name: "1000000000/7 prec=2", a: "1000000000", b: "7", prec: 2, wantQ: "142857142.85", wantR: "0.05"},
+
+			// --- prec=0 forces integer quotient ---
+			{name: "99/100 prec=0", a: "99", b: "100", prec: 0, wantQ: "0", wantR: "99"},
+			{name: "999/1000 prec=0", a: "999", b: "1000", prec: 0, wantQ: "0", wantR: "999"},
+
+			// --- High precision ---
+			{name: "1/7 prec=10", a: "1", b: "7", prec: 10, wantQ: "0.1428571428", wantR: "0.0000000004"},
+			{name: "22/7 prec=8", a: "22", b: "7", prec: 8, wantQ: "3.14285714", wantR: "0.00000002"},
+
+			// --- Very small values ---
+			{name: "0.000000001/1 prec=0", a: "0.000000001", b: "1", prec: 0, wantQ: "0", wantR: "0.000000001"},
+			{name: "0.000000001/0.000000001 prec=0", a: "0.000000001", b: "0.000000001", prec: 0, wantQ: "1", wantR: "0"},
+		}
+
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				a := alpacadecimal.RequireFromString(tc.a)
+				b := alpacadecimal.RequireFromString(tc.b)
+				q, r := a.QuoRem(b, tc.prec)
+				assert.Equal(t, tc.wantQ, q.String(), "quotient mismatch")
+				assert.Equal(t, tc.wantR, r.String(), "remainder mismatch")
+
+				// Verify invariant: q * b + r == a
+				reconstructed := q.Mul(b).Add(r)
+				assert.True(t, reconstructed.Equal(a),
+					"invariant q*b+r==a failed: q=%s b=%s r=%s reconstructed=%s a=%s",
+					q.String(), b.String(), r.String(), reconstructed.String(), a.String())
+			})
+		}
+
+		// Division by zero must panic.
+		t.Run("division by zero panics", func(t *testing.T) {
+			require.Panics(t, func() {
+				a := alpacadecimal.RequireFromString("10")
+				b := alpacadecimal.RequireFromString("0")
+				a.QuoRem(b, 0)
+			})
+		})
 	})
 
 	t.Run("Decimal.Rat", func(t *testing.T) {
@@ -648,6 +864,7 @@ t.Run("Avg", func(t *testing.T) {
 		require.Equal(t, "2", alpacadecimal.RequireFromString("1.5").RoundBank(0).String())
 		require.Equal(t, "2", alpacadecimal.RequireFromString("2.5").RoundBank(0).String())
 		require.Equal(t, "4", alpacadecimal.RequireFromString("3.5").RoundBank(0).String())
+		require.Equal(t, "10000", alpacadecimal.RequireFromString("5000.0000000000000001").RoundBank(-4).String())
 	})
 
 	t.Run("Decimal.RoundCash", func(t *testing.T) {
@@ -661,8 +878,61 @@ t.Run("Avg", func(t *testing.T) {
 	})
 
 	t.Run("Decimal.RoundDown", func(t *testing.T) {
-		require.Equal(t, "500", alpacadecimal.RequireFromString("545").RoundDown(-2).String())
+		// Positive values: truncate towards zero
 		require.Equal(t, "1.1", alpacadecimal.RequireFromString("1.1001").RoundDown(2).String())
+		require.Equal(t, "1.19", alpacadecimal.RequireFromString("1.199").RoundDown(2).String())
+		require.Equal(t, "1", alpacadecimal.RequireFromString("1.999").RoundDown(0).String())
+		require.Equal(t, "0.12", alpacadecimal.RequireFromString("0.129").RoundDown(2).String())
+		require.Equal(t, "1.45", alpacadecimal.RequireFromString("1.454").RoundDown(2).String())
+
+		// Negative values: truncate towards zero (towards +infinity)
+		require.Equal(t, "-1.1", alpacadecimal.RequireFromString("-1.1001").RoundDown(2).String())
+		require.Equal(t, "-1.19", alpacadecimal.RequireFromString("-1.199").RoundDown(2).String())
+		require.Equal(t, "-1", alpacadecimal.RequireFromString("-1.999").RoundDown(0).String())
+		require.Equal(t, "-1.45", alpacadecimal.RequireFromString("-1.454").RoundDown(2).String())
+
+		// Negative places: round integer part towards zero
+		require.Equal(t, "500", alpacadecimal.RequireFromString("545").RoundDown(-2).String())
+		require.Equal(t, "-500", alpacadecimal.RequireFromString("-545").RoundDown(-2).String())
+		require.Equal(t, "1200", alpacadecimal.RequireFromString("1299").RoundDown(-2).String())
+		require.Equal(t, "0", alpacadecimal.RequireFromString("99").RoundDown(-2).String())
+		require.Equal(t, "1000", alpacadecimal.RequireFromString("1234").RoundDown(-3).String())
+
+		// Already exact: no change
+		require.Equal(t, "1.5", alpacadecimal.RequireFromString("1.5").RoundDown(1).String())
+		require.Equal(t, "500", alpacadecimal.RequireFromString("500").RoundDown(-2).String())
+		require.Equal(t, "-500", alpacadecimal.RequireFromString("-500").RoundDown(-2).String())
+		require.Equal(t, "0", alpacadecimal.RequireFromString("0").RoundDown(2).String())
+
+		// Zero decimal places
+		require.Equal(t, "5", alpacadecimal.RequireFromString("5.9").RoundDown(0).String())
+		require.Equal(t, "-5", alpacadecimal.RequireFromString("-5.9").RoundDown(0).String())
+
+		// High precision: places larger than fractional digits (no-op)
+		require.Equal(t, "1.23", alpacadecimal.RequireFromString("1.23").RoundDown(5).String())
+
+		// Optimized boundary
+		require.Equal(t, "9223372", alpacadecimal.RequireFromString("9223372.999").RoundDown(0).String())
+		require.Equal(t, "9223372.99", alpacadecimal.RequireFromString("9223372.999").RoundDown(2).String())
+
+		// Fallback range
+		require.Equal(t, "9223373", alpacadecimal.RequireFromString("9223373.999").RoundDown(0).String())
+		require.Equal(t, "9223373.99", alpacadecimal.RequireFromString("9223373.999").RoundDown(2).String())
+
+		// Symmetric positive/negative with mixed fractional+integer digits
+		require.Equal(t, "454545.4", alpacadecimal.RequireFromString("454545.454545").RoundDown(1).String())
+		require.Equal(t, "454540", alpacadecimal.RequireFromString("454545.454545").RoundDown(-1).String())
+		require.Equal(t, "454545.45", alpacadecimal.RequireFromString("454545.454545").RoundDown(2).String())
+		require.Equal(t, "454500", alpacadecimal.RequireFromString("454545.454545").RoundDown(-2).String())
+		require.Equal(t, "454545.454", alpacadecimal.RequireFromString("454545.454545").RoundDown(3).String())
+		require.Equal(t, "454000", alpacadecimal.RequireFromString("454545.454545").RoundDown(-3).String())
+
+		require.Equal(t, "-454545.4", alpacadecimal.RequireFromString("-454545.454545").RoundDown(1).String())
+		require.Equal(t, "-454540", alpacadecimal.RequireFromString("-454545.454545").RoundDown(-1).String())
+		require.Equal(t, "-454545.45", alpacadecimal.RequireFromString("-454545.454545").RoundDown(2).String())
+		require.Equal(t, "-454500", alpacadecimal.RequireFromString("-454545.454545").RoundDown(-2).String())
+		require.Equal(t, "-454545.454", alpacadecimal.RequireFromString("-454545.454545").RoundDown(3).String())
+		require.Equal(t, "-454000", alpacadecimal.RequireFromString("-454545.454545").RoundDown(-3).String())
 	})
 
 	t.Run("Decimal.RoundFloor", func(t *testing.T) {
@@ -671,9 +941,57 @@ t.Run("Avg", func(t *testing.T) {
 	})
 
 	t.Run("Decimal.RoundUp", func(t *testing.T) {
+		// Existing cases
 		require.Equal(t, "600", alpacadecimal.RequireFromString("545").RoundUp(-2).String())
 		require.Equal(t, "500", alpacadecimal.RequireFromString("500").RoundUp(-2).String())
 		require.Equal(t, "1.11", alpacadecimal.RequireFromString("1.1001").RoundUp(2).String())
+
+		// Positive values: round away from zero (towards +infinity)
+		require.Equal(t, "1.2", alpacadecimal.RequireFromString("1.1001").RoundUp(1).String())
+		require.Equal(t, "2", alpacadecimal.RequireFromString("1.999").RoundUp(0).String())
+		require.Equal(t, "0.13", alpacadecimal.RequireFromString("0.129").RoundUp(2).String())
+		require.Equal(t, "1.46", alpacadecimal.RequireFromString("1.454").RoundUp(2).String())
+		require.Equal(t, "1.5", alpacadecimal.RequireFromString("1.454").RoundUp(1).String())
+
+		// Negative values: round away from zero (towards -infinity)
+		require.Equal(t, "-1.2", alpacadecimal.RequireFromString("-1.1001").RoundUp(1).String())
+		require.Equal(t, "-1.11", alpacadecimal.RequireFromString("-1.1001").RoundUp(2).String())
+		require.Equal(t, "-2", alpacadecimal.RequireFromString("-1.999").RoundUp(0).String())
+		require.Equal(t, "-1.46", alpacadecimal.RequireFromString("-1.454").RoundUp(2).String())
+		require.Equal(t, "-1.5", alpacadecimal.RequireFromString("-1.454").RoundUp(1).String())
+
+		// Negative places: round integer part away from zero
+		require.Equal(t, "550", alpacadecimal.RequireFromString("545").RoundUp(-1).String())
+		require.Equal(t, "-550", alpacadecimal.RequireFromString("-545").RoundUp(-1).String())
+		require.Equal(t, "-600", alpacadecimal.RequireFromString("-545").RoundUp(-2).String())
+		require.Equal(t, "1300", alpacadecimal.RequireFromString("1299").RoundUp(-2).String())
+		require.Equal(t, "2000", alpacadecimal.RequireFromString("1234").RoundUp(-3).String())
+		require.Equal(t, "100", alpacadecimal.RequireFromString("99").RoundUp(-2).String())
+
+		// Already exact: no change
+		require.Equal(t, "1.5", alpacadecimal.RequireFromString("1.5").RoundUp(1).String())
+		require.Equal(t, "500", alpacadecimal.RequireFromString("500").RoundUp(-1).String())
+		require.Equal(t, "-500", alpacadecimal.RequireFromString("-500").RoundUp(-1).String())
+		require.Equal(t, "0", alpacadecimal.RequireFromString("0").RoundUp(2).String())
+		require.Equal(t, "0", alpacadecimal.RequireFromString("0").RoundUp(-2).String())
+
+		// High precision: places larger than fractional digits (no-op)
+		require.Equal(t, "1.23", alpacadecimal.RequireFromString("1.23").RoundUp(5).String())
+
+		// Symmetric positive/negative with mixed digits
+		require.Equal(t, "454545.5", alpacadecimal.RequireFromString("454545.454545").RoundUp(1).String())
+		require.Equal(t, "454545.46", alpacadecimal.RequireFromString("454545.454545").RoundUp(2).String())
+		require.Equal(t, "454545.455", alpacadecimal.RequireFromString("454545.454545").RoundUp(3).String())
+		require.Equal(t, "454550", alpacadecimal.RequireFromString("454545.454545").RoundUp(-1).String())
+		require.Equal(t, "454600", alpacadecimal.RequireFromString("454545.454545").RoundUp(-2).String())
+		require.Equal(t, "455000", alpacadecimal.RequireFromString("454545.454545").RoundUp(-3).String())
+
+		require.Equal(t, "-454545.5", alpacadecimal.RequireFromString("-454545.454545").RoundUp(1).String())
+		require.Equal(t, "-454545.46", alpacadecimal.RequireFromString("-454545.454545").RoundUp(2).String())
+		require.Equal(t, "-454545.455", alpacadecimal.RequireFromString("-454545.454545").RoundUp(3).String())
+		require.Equal(t, "-454550", alpacadecimal.RequireFromString("-454545.454545").RoundUp(-1).String())
+		require.Equal(t, "-454600", alpacadecimal.RequireFromString("-454545.454545").RoundUp(-2).String())
+		require.Equal(t, "-455000", alpacadecimal.RequireFromString("-454545.454545").RoundUp(-3).String())
 	})
 
 	t.Run("Decimal.Scan", func(t *testing.T) {

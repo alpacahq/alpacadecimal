@@ -29,11 +29,33 @@ const (
 	minRoundUpThresholdInFixed int64 = -9 * 1e18 // -900_000_000_000_000_000
 )
 
-var pow10Table []int64 = []int64{
+var pow10Table = [19]int64{
 	1e0, 1e1, 1e2, 1e3, 1e4,
 	1e5, 1e6, 1e7, 1e8, 1e9,
 	1e10, 1e11, 1e12, 1e13, 1e14,
 	1e15, 1e16, 1e17, 1e18,
+}
+
+var pow10 = [19]udecimal.Decimal{
+	udecimal.MustFromInt64(1e0, 0),  // 10^0
+	udecimal.MustFromInt64(1e1, 0),  // 10^1
+	udecimal.MustFromInt64(1e2, 0),  // 10^2
+	udecimal.MustFromInt64(1e3, 0),  // 10^3
+	udecimal.MustFromInt64(1e4, 0),  // 10^4
+	udecimal.MustFromInt64(1e5, 0),  // 10^5
+	udecimal.MustFromInt64(1e6, 0),  // 10^6
+	udecimal.MustFromInt64(1e7, 0),  // 10^7
+	udecimal.MustFromInt64(1e8, 0),  // 10^8
+	udecimal.MustFromInt64(1e9, 0),  // 10^9
+	udecimal.MustFromInt64(1e10, 0), // 10^10
+	udecimal.MustFromInt64(1e11, 0), // 10^11
+	udecimal.MustFromInt64(1e12, 0), // 10^12
+	udecimal.MustFromInt64(1e13, 0), // 10^13
+	udecimal.MustFromInt64(1e14, 0), // 10^14
+	udecimal.MustFromInt64(1e15, 0), // 10^15
+	udecimal.MustFromInt64(1e16, 0), // 10^16
+	udecimal.MustFromInt64(1e17, 0), // 10^17
+	udecimal.MustFromInt64(1e18, 0), // 10^18
 }
 
 // cache value from -1000.00 to 1000.00
@@ -154,27 +176,16 @@ func New(value int64, exp int32) Decimal {
 		return d
 	}
 
-	// Common case: exp in [-19, 0] maps directly to NewFromInt64(value, -exp)
-	if exp <= 0 && exp >= -19 {
-		fb, err := udecimal.NewFromInt64(value, uint8(-exp))
-		if err != nil {
-			panic(fmt.Sprintf("alpacadecimal.New: %v", err))
-		}
-		return newFromFallback(fb)
+	if exp > 0 {
+		return newFromFallback(udecimal.MustFromInt64(value, 0).Mul(pow10[exp]))
 	}
 
-	// Rare: positive exp or exp < -19.
-	// Build value and 10^exp as udecimals, then multiply.
-	fbValue, err := udecimal.NewFromInt64(value, 0)
+	// exp in [-19, 0] maps directly to NewFromInt64(value, -exp)
+	fb, err := udecimal.NewFromInt64(value, uint8(-exp))
 	if err != nil {
 		panic(fmt.Sprintf("alpacadecimal.New: %v", err))
 	}
-	ten, _ := udecimal.NewFromInt64(10, 0)
-	fbScale, err := ten.PowInt32(exp)
-	if err != nil {
-		panic(fmt.Sprintf("alpacadecimal.New: %v", err))
-	}
-	return newFromFallback(fbValue.Mul(fbScale))
+	return newFromFallback(fb)
 }
 
 func tryOptNew(value int64, exp int32) (Decimal, bool) {
@@ -760,17 +771,35 @@ func (d Decimal) Pow(d2 Decimal) Decimal {
 }
 
 // fallback:
-// QuoRem does divsion with remainder
+// QuoRem does division with remainder.
+// The quotient has prec fractional digits and the remainder satisfies
+// d == q * d2 + r (matching shopspring/decimal semantics).
 func (d Decimal) QuoRem(d2 Decimal, prec int32) (Decimal, Decimal) {
-	// Reimplement with big.Int to support the precision parameter
-	fb1 := d.asFallback().Trunc(uint8(prec))
-	fb2 := d2.asFallback().Trunc(uint8(prec))
-	qDec, rDec, err := fb1.QuoRem(fb2)
+	// Fast path: prec fits in udecimal's 0..19 range
+	if !(prec >= 0 && prec <= 19) {
+		panic(fmt.Sprintf("QuoRem precision must be between 0 and 19, got %d", prec))
+	}
+
+	fb1 := d.asFallback()
+	fb2 := d2.asFallback()
+
+	scaled := fb1.Mul(pow10[prec])
+
+	// udecimal QuoRem: intQ is an integer, intR has max(scaled.prec, fb2.prec)
+	// fractional digits. Uses optimized u128 arithmetic when possible.
+	intQ, intR, err := scaled.QuoRem(fb2)
 	if err != nil {
 		panic(fmt.Sprintf("decimal QuoRem error: %v", err))
 	}
 
-	return NewFromUDecimal(qDec), NewFromUDecimal(rDec)
+	// Divide both by 10^prec to restore the correct precision.
+	// Quotient: intQ / 10^prec has exactly prec fractional digits (exact).
+	// Remainder: intR / 10^prec has (commonPrec + prec) fractional digits
+	// (exact when commonPrec + prec <= 19).
+	qU, _ := intQ.Div(pow10[prec])
+	rU, _ := intR.Div(pow10[prec])
+
+	return newFromFallback(qU), newFromFallback(rU)
 }
 
 // fallback:
@@ -813,7 +842,17 @@ func (d Decimal) Round(places int32) Decimal {
 			}
 		}
 	}
-	return roundFallbackHAZ(d.asFallback(), places)
+	// fallback
+	if places >= 0 {
+		return NewFromUDecimal(d.asFallback().RoundHAZ(uint8(places)))
+	}
+
+	res, _ := d.asFallback().Div(pow10[int(-places)])
+	res = res.RoundHAZ(0)
+	if res.IsZero() {
+		return Zero
+	}
+	return NewFromUDecimal(res.Mul(pow10[int(-places)]))
 }
 
 // fallback:
@@ -823,11 +862,24 @@ func (d Decimal) Round(places int32) Decimal {
 //
 // If places < 0, it will round the integer part to the nearest 10^(-places).
 func (d Decimal) RoundBank(places int32) Decimal {
-	if places >= 0 && places <= 19 {
+	if d.IsZero() {
+		return Zero
+	}
+
+	if places >= 0 {
 		fb := d.asFallback()
 		return newFromFallback(fb.RoundBank(uint8(places)))
 	}
-	return roundFallbackBank(d.asFallback(), places)
+	res := d.asFallback()
+	if res.Prec()+int(-places) > 19 {
+		// If the number of digits to round is greater than 19,
+		// we need to round it first before dividing
+		// to avoid precision issues in udecimal.
+		res = res.RoundAwayFromZero(0)
+	}
+	res, _ = res.Div(pow10[int(-places)])
+	res = res.RoundBank(0)
+	return NewFromUDecimal(res.Mul(pow10[int(-places)]))
 }
 
 // fallback:
@@ -893,7 +945,16 @@ func (d Decimal) RoundCeil(places int32) Decimal {
 //	NewFromFloat(-1.454).RoundDown(1).String() // output: "-1.5"
 func (d Decimal) RoundDown(places int32) Decimal {
 	if d.hasFallback || places <= -7 {
-		return roundDownFallback(d, places)
+		if places >= 0 {
+			return NewFromUDecimal(d.asFallback().Trunc(uint8(places)))
+		}
+
+		res, _ := d.asFallback().Div(pow10[int(-places)])
+		res = res.Trunc(0)
+		if res.IsZero() {
+			return Zero
+		}
+		return NewFromUDecimal(res.Mul(pow10[int(-places)]))
 	}
 
 	if places >= precision {
@@ -908,57 +969,6 @@ func (d Decimal) RoundDown(places int32) Decimal {
 	}
 
 	return Decimal{fixed: rescaled}
-}
-
-func roundDownFallback(d Decimal, places int32) Decimal {
-	fb := d.asFallback()
-	if places >= 0 && places <= 19 {
-		result := fb.Trunc(uint8(places))
-		if d.hasFallback {
-			return newFromFallback(result)
-		}
-		return NewFromUDecimal(result)
-	}
-
-	if rounded, ok := roundDownFastInt64(fb, places); ok {
-		return rounded
-	}
-
-	// Negative places: round toward zero at 10^(-places) boundary
-	return roundDownBigInt(fb, places)
-}
-
-func roundDownFastInt64(fb udecimal.Decimal, places int32) (Decimal, bool) {
-	// Fast path tuned for the hot benchmark range: -6..-1.
-	if places >= 0 || places < -6 {
-		return Decimal{}, false
-	}
-
-	neg, hi, lo, prec, ok := fb.ToHiLo()
-	if !ok || hi != 0 {
-		return Decimal{}, false
-	}
-
-	shift := -places
-	totalExp := int32(prec) + shift
-	if totalExp < 0 || totalExp > 18 || shift > 18 {
-		return Decimal{}, false
-	}
-
-	divisor := uint64(pow10Table[totalExp])
-	multiplier := uint64(pow10Table[shift])
-
-	q := lo / divisor
-	if q > uint64(math.MaxInt64)/multiplier {
-		return Decimal{}, false
-	}
-
-	result := int64(q * multiplier)
-	if neg {
-		result = -result
-	}
-
-	return NewFromInt(result), true
 }
 
 // fallback:
@@ -1003,7 +1013,16 @@ func (d Decimal) RoundUp(places int32) Decimal {
 		// i.e. 9_200_000.1 with places=-5 =>  9_300_000 (fallback)
 		(places < 0 &&
 			(d.fixed > maxRoundUpThresholdInFixed || d.fixed < minRoundUpThresholdInFixed)) {
-		return roundUpFallback(d, places)
+		// fallback
+		if places >= 0 {
+			return NewFromUDecimal(d.asFallback().RoundAwayFromZero(uint8(places)))
+		}
+
+		// RoundAwayFromZero to the integer part, then multiply back by 10^(-places).
+		fb := d.asFallback().RoundAwayFromZero(0)
+		res, _ := fb.Div(pow10[int(-places)])
+		res = res.RoundAwayFromZero(0)
+		return NewFromUDecimal(res.Mul(pow10[int(-places)]))
 	}
 
 	if places >= precision {
@@ -1021,44 +1040,6 @@ func (d Decimal) RoundUp(places int32) Decimal {
 		return Decimal{fixed: rescaled + (1 * s)}
 	}
 	return Decimal{fixed: rescaled - (1 * s)}
-}
-
-func roundUpFallback(d Decimal, places int32) Decimal {
-	// Fast path for optimized decimals with negative places in [-6, -1].
-	// This avoids the expensive big.Int fallback path in common benchmark cases.
-	if rounded, ok := roundUpFixedNegativePlaces(d, places); ok {
-		return rounded
-	}
-
-	fb := d.asFallback()
-	if places >= 0 && places <= 19 {
-		result := fb.RoundAwayFromZero(uint8(places))
-		if d.hasFallback {
-			return newFromFallback(result)
-		}
-		return NewFromUDecimal(result)
-	}
-	// Negative places: use big.Int
-	return roundUpBigInt(fb, places)
-}
-
-func roundUpFixedNegativePlaces(d Decimal, places int32) (Decimal, bool) {
-	if d.hasFallback || places >= 0 || places < -6 {
-		return Decimal{}, false
-	}
-
-	// 1 <= -places <= 6 here, so both lookups are safe.
-	shiftInFixed := pow10Table[precision-places]
-	q := d.fixed / shiftInFixed
-	if d.fixed%shiftInFixed != 0 {
-		if d.fixed > 0 {
-			q++
-		} else {
-			q--
-		}
-	}
-
-	return New(q, -places), true
 }
 
 // optimized:
@@ -1267,15 +1248,9 @@ func (d Decimal) Truncate(precision int32) Decimal {
 		s := pow10Table[12-precision]
 		return Decimal{fixed: d.fixed / s * s}
 	}
-	if precision >= 0 && precision <= 19 {
-		fb := d.asFallback()
-		return newFromFallback(fb.Trunc(uint8(precision)))
-	}
-	if precision < 0 {
-		return truncateNegativePrecision(d, precision)
-	}
 
-	panic("alpacadecimal.Truncate: invalid precision")
+	fb := d.asFallback()
+	return newFromFallback(fb.Trunc(uint8(precision)))
 }
 
 // fallback:
@@ -1788,243 +1763,8 @@ func padStringToPlaces(s string, places int32) string {
 
 // newShiftedOne returns 10^(-places) as a Decimal
 func newShiftedOne(places int32) Decimal {
+	if places <= 0 {
+		return NewFromUDecimal(pow10[int(-places)])
+	}
 	return New(1, -places)
-}
-
-// roundFallbackHAZ rounds using half-away-from-zero for negative places
-func roundFallbackHAZ(fb udecimal.Decimal, places int32) Decimal {
-	if places >= 0 && places <= 19 {
-		return newFromFallback(fb.RoundHAZ(uint8(places)))
-	}
-	// Negative places: round to nearest 10^(-places)
-	return roundHAZBigInt(fb, places)
-}
-
-// roundFallbackBank rounds using banker's rounding for negative places
-func roundFallbackBank(fb udecimal.Decimal, places int32) Decimal {
-	// Negative places: use big.Int
-	return roundBankBigInt(fb, places)
-}
-
-// Helper to parse a decimal string into big.Int coefficient and precision
-func parseToBigIntAndPrec(s string) (*big.Int, int32) {
-	neg := false
-	if len(s) > 0 && s[0] == '-' {
-		neg = true
-		s = s[1:]
-	}
-	var prec int32
-	if idx := strings.IndexByte(s, '.'); idx >= 0 {
-		prec = int32(len(s) - idx - 1)
-		s = s[:idx] + s[idx+1:]
-	}
-	bi := new(big.Int)
-	bi.SetString(s, 10)
-	if neg {
-		bi.Neg(bi)
-	}
-	return bi, prec
-}
-
-// Helper to convert a big.Int with given precision to a Decimal
-func bigIntToDecimalWithPrec(bi *big.Int, prec int32) Decimal {
-	if prec <= 0 {
-		s := bi.String()
-		if fixed, ok := parseFixed(s); ok {
-			return Decimal{fixed: fixed}
-		}
-		fb, err := udecimal.Parse(s)
-		if err != nil {
-			return newFromFallback(udecimal.Zero)
-		}
-		return newFromFallback(fb)
-	}
-
-	neg := bi.Sign() < 0
-	abs := new(big.Int).Abs(bi)
-	s := abs.String()
-
-	for int32(len(s)) <= prec {
-		s = "0" + s
-	}
-	intPart := s[:len(s)-int(prec)]
-	fracPart := s[len(s)-int(prec):]
-	fracPart = strings.TrimRight(fracPart, "0")
-
-	var result string
-	if fracPart == "" {
-		result = intPart
-	} else {
-		result = intPart + "." + fracPart
-	}
-	if neg {
-		result = "-" + result
-	}
-
-	if fixed, ok := parseFixed(result); ok {
-		return Decimal{fixed: fixed}
-	}
-	fb, err := udecimal.Parse(result)
-	if err != nil {
-		return newFromFallback(udecimal.Zero)
-	}
-	return newFromFallback(fb)
-}
-
-// roundHAZBigInt implements half-away-from-zero rounding for negative places using big.Int
-func roundHAZBigInt(fb udecimal.Decimal, places int32) Decimal {
-	s := fb.String()
-	bi, prec := parseToBigIntAndPrec(s)
-
-	negPlaces := -places
-	totalScale := int64(negPlaces) + int64(prec)
-	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(totalScale), nil)
-
-	q, r := new(big.Int).QuoRem(bi, divisor, new(big.Int))
-	half := new(big.Int).Quo(divisor, big.NewInt(2))
-
-	ar := new(big.Int).Abs(r)
-	if ar.Cmp(half) >= 0 {
-		if bi.Sign() >= 0 {
-			q.Add(q, big.NewInt(1))
-		} else {
-			q.Sub(q, big.NewInt(1))
-		}
-	}
-	resultDivisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(negPlaces)), nil)
-	q.Mul(q, resultDivisor)
-
-	result := q.String()
-	if fixed, ok := parseFixed(result); ok {
-		return Decimal{fixed: fixed}
-	}
-	fb2, err := udecimal.Parse(result)
-	if err != nil {
-		return newFromFallback(udecimal.Zero)
-	}
-	return newFromFallback(fb2)
-}
-
-// roundBankBigInt implements banker's rounding for negative places using big.Int
-func roundBankBigInt(fb udecimal.Decimal, places int32) Decimal {
-	s := fb.String()
-	bi, prec := parseToBigIntAndPrec(s)
-
-	// Scale: work at precision `prec` so we don't lose fractional info.
-	// divisor = 10^(-places + prec), so that bi / divisor gives us the integer quotient
-	// at the rounding boundary.
-	negPlaces := -places
-	totalScale := int64(negPlaces) + int64(prec)
-	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(totalScale), nil)
-
-	q, r := new(big.Int).QuoRem(bi, divisor, new(big.Int))
-	half := new(big.Int).Quo(divisor, big.NewInt(2))
-
-	ar := new(big.Int).Abs(r)
-	cmp := ar.Cmp(half)
-	if cmp > 0 || (cmp == 0 && new(big.Int).Abs(q).Bit(0) == 1) {
-		if bi.Sign() >= 0 {
-			q.Add(q, big.NewInt(1))
-		} else {
-			q.Sub(q, big.NewInt(1))
-		}
-	}
-	// Result = q * 10^negPlaces
-	resultDivisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(negPlaces)), nil)
-	q.Mul(q, resultDivisor)
-
-	result := q.String()
-	if fixed, ok := parseFixed(result); ok {
-		return Decimal{fixed: fixed}
-	}
-	fb2, err := udecimal.Parse(result)
-	if err != nil {
-		return newFromFallback(udecimal.Zero)
-	}
-	return newFromFallback(fb2)
-}
-
-// roundDownBigInt implements truncation for negative places using big.Int
-func roundDownBigInt(fb udecimal.Decimal, places int32) Decimal {
-	s := fb.String()
-	bi, prec := parseToBigIntAndPrec(s)
-
-	// For toward-zero truncation, losing fractional digits first is fine
-	if prec > 0 {
-		bi.Quo(bi, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(prec)), nil))
-	}
-
-	negPlaces := -places
-	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(negPlaces)), nil)
-
-	q := new(big.Int).Quo(bi, divisor)
-	q.Mul(q, divisor)
-
-	result := q.String()
-	if fixed, ok := parseFixed(result); ok {
-		return Decimal{fixed: fixed}
-	}
-	fb2, err := udecimal.Parse(result)
-	if err != nil {
-		return newFromFallback(udecimal.Zero)
-	}
-	return newFromFallback(fb2)
-}
-
-// roundUpBigInt implements round-away-from-zero for negative places using big.Int
-func roundUpBigInt(fb udecimal.Decimal, places int32) Decimal {
-	s := fb.String()
-	bi, prec := parseToBigIntAndPrec(s)
-
-	negPlaces := -places
-	totalScale := int64(negPlaces) + int64(prec)
-	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(totalScale), nil)
-
-	q, r := new(big.Int).QuoRem(bi, divisor, new(big.Int))
-
-	if r.Sign() != 0 {
-		if bi.Sign() >= 0 {
-			q.Add(q, big.NewInt(1))
-		} else {
-			q.Sub(q, big.NewInt(1))
-		}
-	}
-	resultDivisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(negPlaces)), nil)
-	q.Mul(q, resultDivisor)
-
-	result := q.String()
-	if fixed, ok := parseFixed(result); ok {
-		return Decimal{fixed: fixed}
-	}
-	fb2, err := udecimal.Parse(result)
-	if err != nil {
-		return newFromFallback(udecimal.Zero)
-	}
-	return newFromFallback(fb2)
-}
-
-// truncateNegativePrecision handles Truncate with negative precision
-func truncateNegativePrecision(d Decimal, precision int32) Decimal {
-	fb := d.asFallback()
-	s := fb.String()
-	bi, prec := parseToBigIntAndPrec(s)
-
-	if prec > 0 {
-		bi.Quo(bi, new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(prec)), nil))
-	}
-
-	negPrec := -precision
-	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(negPrec)), nil)
-	q := new(big.Int).Quo(bi, divisor)
-	q.Mul(q, divisor)
-
-	result := q.String()
-	if fixed, ok := parseFixed(result); ok {
-		return Decimal{fixed: fixed}
-	}
-	fb2, err := udecimal.Parse(result)
-	if err != nil {
-		return newFromFallback(udecimal.Zero)
-	}
-	return newFromFallback(fb2)
 }
