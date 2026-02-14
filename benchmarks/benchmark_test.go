@@ -421,9 +421,11 @@ func BenchmarkSum(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
+			temp := udecimal.Zero
 			for _, item := range []udecimal.Decimal{d1, d2, d3} {
-				result = result.Add(item)
+				temp = temp.Add(item)
 			}
+			result = temp
 		}
 		_ = result
 	})
@@ -581,14 +583,16 @@ func BenchmarkAvg(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
 		d2 := udecimal.MustParse("223456789.123")
 		d3 := udecimal.MustParse("323456789.123")
+		items := []udecimal.Decimal{d1, d2, d3}
 		var result udecimal.Decimal
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			for _, item := range []udecimal.Decimal{d1, d2, d3} {
-				result = result.Add(item)
+			temp := udecimal.Zero
+			for _, item := range items {
+				temp = temp.Add(item)
 			}
-			result, _ = result.Div(udecimal.MustFromInt64(3, 0))
+			result, _ = temp.Div(udecimal.MustFromInt64(3, 0))
 		}
 		_ = result
 	})
@@ -1032,17 +1036,6 @@ func BenchmarkShift(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.Shift(2)
-		}
-		_ = result
-	})
-
-	b.Run("udecimal", func(b *testing.B) {
-		d := udecimal.MustParse("123456789.123")
-		var result udecimal.Decimal
-		b.ResetTimer()
-		b.ReportAllocs()
-		for n := 0; n < b.N; n++ {
-			result = d.Mul(udecimal.MustFromUint64(1, 2))
 		}
 		_ = result
 	})
@@ -2525,7 +2518,7 @@ func BenchmarkRoundDown(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
-			for i := int32(-6); i <= 12; i++ {
+			for i := int32(0); i <= 18; i++ {
 				result1 = d1.RoundHTZ(uint8(i))
 				result2 = d2.RoundHTZ(uint8(i))
 				result3 = d3.RoundHTZ(uint8(i))
@@ -2868,7 +2861,7 @@ func BenchmarkScan(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d decimal.Decimal
-			err = d.Scan(small)
+			err = d.Scan(large)
 		}
 		_ = err
 	})
@@ -2879,7 +2872,7 @@ func BenchmarkScan(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d udecimal.Decimal
-			err = d.Scan(small)
+			err = d.Scan(large)
 		}
 		_ = err
 	})
