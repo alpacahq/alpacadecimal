@@ -733,10 +733,11 @@ func TestDecimal(t *testing.T) {
 	t.Run("Decimal.QuoRem", func(t *testing.T) {
 		tests := []struct {
 			name  string
-			a, b  string
-			prec  int32
+			a     string
+			b     string
 			wantQ string
 			wantR string
+			prec  int32
 		}{
 			// --- Basic integer division ---
 			{name: "10/3 prec=0", a: "10", b: "3", prec: 0, wantQ: "3", wantR: "1"},
@@ -1386,9 +1387,9 @@ func TestNewFromFloatHighPrecision(t *testing.T) {
 	// Floats whose minimal string representation exceeds 19 fractional digits
 	// should be rounded to 19 fractional digits, not panic.
 	tests := []struct {
+		check func(t *testing.T, d alpacadecimal.Decimal)
 		name  string
 		bits  uint64
-		check func(t *testing.T, d alpacadecimal.Decimal)
 	}{
 		{
 			name: "very small float from oms2",

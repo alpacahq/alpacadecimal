@@ -127,13 +127,15 @@ var (
 
 type Decimal struct {
 	// fallback to udecimal.Decimal if necessary
-	fallback    udecimal.Decimal
-	hasFallback bool
+	fallback udecimal.Decimal
 
 	// represent decimal with 12 precision, 1.23 will have `fixed = 1_230_000_000_000`
 	// max support decimal is 9_223_372.000_000_000_000
 	// min support decimal is -9_223_372.000_000_000_000
 	fixed int64
+
+	// hasFallback indicates whether the Decimal is using fallback representation.
+	hasFallback bool
 }
 
 // optimized:
