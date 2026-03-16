@@ -1052,7 +1052,7 @@ func TestDecimal(t *testing.T) {
 		require.Equal(t, "-1.234", y.Truncate(3).String())
 		require.Equal(t, "-1.234", y.Truncate(4).String())
 
-		for i := int32(0); i < 10; i++ {
+		for i := int32(0); i < 20; i++ {
 			requireCompatible(t, func(input string) (string, string) {
 				x := alpacadecimal.RequireFromString(input).Truncate(i).String()
 				y := decimal.RequireFromString(input).Truncate(i).String()
