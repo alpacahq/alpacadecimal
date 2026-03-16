@@ -476,6 +476,14 @@ func (d Decimal) Floor() Decimal {
 	return newFromDecimal(d.asFallback().Floor())
 }
 
+// CopySign returns a value with the magnitude of d and the sign of sign.
+func (d Decimal) CopySign(sign Decimal) Decimal {
+	if d.IsNegative() == sign.IsNegative() {
+		return d
+	}
+	return d.Neg()
+}
+
 // fallback: (can be optimized if needed)
 func (d *Decimal) GobDecode(data []byte) error {
 	return d.UnmarshalBinary(data)
