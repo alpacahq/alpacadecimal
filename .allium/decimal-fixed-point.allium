@@ -1,0 +1,148 @@
+-- allium: 3
+-- decimal-fixed-point.allium
+--
+-- Scope: Exact decimal arithmetic for financial calculations.
+-- Provides Decimal and NullDecimal value types with arithmetic,
+-- comparison, rounding, and serialisation operations that preserve
+-- numeric exactness for common financial values.
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value Decimal {
+    -- An exact decimal number for financial arithmetic.
+    -- Two Decimals with the same numeric value are equal regardless
+    -- of construction path.
+    coefficient: Integer
+    exponent: Integer
+
+    invariant NumericEquality {
+        -- equality is by numeric value, not by structural comparison of
+        -- coefficient and exponent fields
+        coefficient = 0 implies exponent = 0
+    }
+}
+
+value NullDecimal {
+    decimal: Decimal?
+}
+
+------------------------------------------------------------
+-- Contracts
+------------------------------------------------------------
+
+contract ArithmeticOperations {
+    add: (a: Decimal, b: Decimal) -> Decimal
+    subtract: (a: Decimal, b: Decimal) -> Decimal
+    multiply: (a: Decimal, b: Decimal) -> Decimal
+    divide: (a: Decimal, b: Decimal) -> Decimal
+    negate: (value: Decimal) -> Decimal
+    absolute: (value: Decimal) -> Decimal
+
+    @invariant ExactArithmetic
+        -- Results are numerically exact for values within the supported
+        -- precision range. Non-terminating division produces a result
+        -- with at most config.division_precision fractional digits.
+
+    @invariant Commutativity
+        -- add(a, b) = add(b, a) and multiply(a, b) = multiply(b, a).
+}
+
+contract ComparisonOperations {
+    compare: (a: Decimal, b: Decimal) -> Integer
+    equal: (a: Decimal, b: Decimal) -> Boolean
+
+    @invariant OrderConsistency
+        -- compare returns a value less than zero when a < b, zero when
+        -- a = b, and a value greater than zero when a > b.
+        -- equal(a, b) is true if and only if compare(a, b) = 0.
+}
+
+contract RoundingOperations {
+    round: (value: Decimal, places: Integer, mode: RoundingMode) -> Decimal
+    truncate: (value: Decimal, places: Integer) -> Decimal
+    ceiling: (value: Decimal) -> Decimal
+    floor: (value: Decimal) -> Decimal
+
+    @invariant PlacesBound
+        -- For places >= 0, round(value, places, mode) produces a result
+        -- with at most places digits after the decimal point.
+
+    @invariant TruncateTowardZero
+        -- truncate discards fractional digits without rounding, moving
+        -- the result toward zero.
+
+    @invariant CeilingFloorBounds
+        -- ceiling(value) is the smallest integer value >= value.
+        -- floor(value) is the largest integer value <= value.
+}
+
+contract DecimalSerialization {
+    to_string: (value: Decimal) -> String
+    from_string: (text: String) -> Decimal
+
+    @invariant Roundtrip
+        -- from_string(to_string(value)) produces a value numerically equal
+        -- to the original for all representable Decimals.
+}
+
+contract NullDecimalSerialization {
+    serialise: (value: NullDecimal) -> String
+    deserialise: (text: String) -> NullDecimal
+
+    @invariant AbsenceRoundtrip
+        -- An absent NullDecimal serialises to a canonical absent
+        -- representation; deserialising that representation produces
+        -- an absent NullDecimal.
+
+    @invariant PresenceRoundtrip
+        -- A present NullDecimal serialises to its underlying Decimal's
+        -- string form; deserialising that string produces a present
+        -- NullDecimal with a numerically equal Decimal.
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum RoundingMode { half_up | half_even | toward_zero | away_from_zero | toward_positive_infinity | toward_negative_infinity }
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    fractional_precision: Integer = 12
+    division_precision: Integer = 16
+}
+
+------------------------------------------------------------
+-- Surfaces
+------------------------------------------------------------
+
+surface DecimalLibrary {
+    contracts:
+        fulfils ArithmeticOperations
+        fulfils ComparisonOperations
+        fulfils RoundingOperations
+        fulfils DecimalSerialization
+        fulfils NullDecimalSerialization
+
+    @guarantee PrecisionPreservation
+        -- All arithmetic operations preserve numeric exactness within
+        -- the supported precision range; no result silently loses precision.
+
+    @guarantee TransparentFallback
+        -- Values outside the supported precision range are handled
+        -- automatically with no observable change in numeric behaviour
+        -- from the caller's perspective.
+
+    @guarantee NullDecimalCompatibility
+        -- An absent NullDecimal serialises to a null representation in
+        -- all supported formats; deserialising a null or empty input
+        -- produces an absent NullDecimal.
+        -- A present NullDecimal serialises to the underlying Decimal's
+        -- string form; deserialising that input produces a present
+        -- NullDecimal with a numerically equal Decimal.
+}
