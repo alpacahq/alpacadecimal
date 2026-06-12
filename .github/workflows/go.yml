@@ -13,7 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.23', '1.24', '1.25', '1.26' ]
+        # zerodecimal (the fallback engine) requires Go 1.26+
+        go-version: [ '1.26' ]
 
     steps:
     - uses: actions/checkout@v6
