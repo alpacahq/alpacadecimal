@@ -4,7 +4,7 @@ import (
 	"math"
 	"math/big"
 
-	"github.com/quagmt/udecimal"
+	zerodecimal "github.com/AlexandrosKyriakakis/zerodecimal"
 )
 
 // optimized:
@@ -13,17 +13,13 @@ func (d Decimal) IntPart() int64 {
 	if d.fallback == nil {
 		return d.fixed / scale
 	}
-	v, err := d.fallback.Int64()
+	v, err := d.fallback.IntPart()
 	if err == nil {
 		return v
 	}
 	// Out of int64 range. shopspring's behavior (big.Int.Int64) is documented
 	// as undefined here; return the truncated low 64 bits without panicking.
-	neg, hi, lo, prec, ok := d.fallback.ToHiLo()
-	if !ok {
-		bi := d.BigInt()
-		return bi.Int64()
-	}
+	neg, hi, lo, prec := d.fallback.ToHiLo()
 	_, qlo, _ := div128by64(hi, lo, pow10u[prec])
 	return signed64(qlo, neg)
 }
@@ -96,8 +92,8 @@ func (d Decimal) InexactFloat64() float64 {
 			return float64(d.fixed) / scale
 		}
 	} else {
-		neg, hi, lo, prec, ok := d.fallback.ToHiLo()
-		if ok && hi == 0 && lo <= 1<<53 {
+		neg, hi, lo, prec := d.fallback.ToHiLo()
+		if hi == 0 && lo <= 1<<53 {
 			// both operands convert exactly (10^prec <= 10^19 = 2^19*5^19,
 			// 5^19 < 2^53), so the division is a single correct rounding
 			f := float64(lo) / float64(pow10u[prec])
@@ -119,8 +115,8 @@ func (d Decimal) NumDigits() int {
 	if d.fallback == nil {
 		return digitCount(uabs(d.fixed))
 	}
-	_, hi, lo, _, ok := d.fallback.ToHiLo()
-	if ok && hi == 0 {
+	_, hi, lo, _ := d.fallback.ToHiLo()
+	if hi == 0 {
 		return digitCount(lo)
 	}
 	coef, _ := d.toBigParts()
@@ -136,7 +132,7 @@ func (d Decimal) Exponent() int32 {
 	if d.fallback == nil {
 		return -precision
 	}
-	return -int32(d.fallback.PrecUint())
+	return -int32(d.fallback.Prec())
 }
 
 // optimized:
@@ -145,17 +141,8 @@ func (d Decimal) Coefficient() *big.Int {
 	if d.fallback == nil {
 		return big.NewInt(d.fixed)
 	}
-	neg, hi, lo, _, ok := d.fallback.ToHiLo()
-	if ok {
-		return bigFromHiLo(neg, hi, lo)
-	}
-	// toBigParts trims trailing fractional zeros, but the result must pair
-	// with Exponent() == -PrecUint(): scale the coefficient back up.
-	coef, exp := d.toBigParts()
-	if shift := int64(exp) + int64(d.fallback.PrecUint()); shift > 0 {
-		coef.Mul(coef, bigPow10(shift))
-	}
-	return coef
+	neg, hi, lo, _ := d.fallback.ToHiLo()
+	return bigFromHiLo(neg, hi, lo)
 }
 
 // optimized:
@@ -165,8 +152,8 @@ func (d Decimal) CoefficientInt64() int64 {
 	if d.fallback == nil {
 		return d.fixed
 	}
-	neg, hi, lo, _, ok := d.fallback.ToHiLo()
-	if ok && hi == 0 && lo <= math.MaxInt64 {
+	neg, hi, lo, _ := d.fallback.ToHiLo()
+	if hi == 0 && lo <= math.MaxInt64 {
 		return signed64(lo, neg)
 	}
 	return d.Coefficient().Int64()
@@ -182,15 +169,12 @@ func (d Decimal) IsInteger() bool {
 }
 
 func (d Decimal) isIntegerSlow() bool {
-	_, hi, lo, prec, ok := d.fallback.ToHiLo()
-	if ok {
-		if prec == 0 {
-			return true
-		}
-		_, _, r := div128by64(hi, lo, pow10u[prec])
-		return r == 0
+	_, hi, lo, prec := d.fallback.ToHiLo()
+	if prec == 0 {
+		return true
 	}
-	return d.fallback.Trunc(0).Equal(*d.fallback)
+	_, _, r := div128by64(hi, lo, pow10u[prec])
+	return r == 0
 }
 
 // optimized:
@@ -207,7 +191,7 @@ func (d Decimal) Rescale() Decimal {
 	if d.fallback == nil {
 		return d
 	}
-	return NewFromUDecimal(*d.fallback)
+	return NewFromDecimal(*d.fallback)
 }
 
 // Extra API to support get internal state.
@@ -216,7 +200,7 @@ func (d Decimal) GetFixed() int64 {
 	return d.fixed
 }
 
-func (d Decimal) GetFallback() *udecimal.Decimal {
+func (d Decimal) GetFallback() *zerodecimal.Decimal {
 	if d.fallback == nil {
 		return nil
 	}
@@ -229,33 +213,24 @@ func (d Decimal) IsOptimized() bool {
 }
 
 // optimized:
-// NewFromUDecimal creates a new alpacadecimal.Decimal from a udecimal.Decimal,
-// using the optimized fixed representation when the value fits.
-func NewFromUDecimal(u udecimal.Decimal) Decimal {
-	if fixed, ok, certain := tryFixedFromUDecimal(u); ok {
+// NewFromDecimal creates a new alpacadecimal.Decimal from a
+// zerodecimal.Decimal, using the optimized fixed representation when the
+// value fits.
+func NewFromDecimal(u zerodecimal.Decimal) Decimal {
+	if fixed, ok := tryFixedFromZD(u); ok {
 		return Decimal{fixed: fixed}
-	} else if certain {
-		return newFromFallback(u)
 	}
-	// Rare: the coefficient exceeds 128 bits so the fast introspection cannot
-	// determine fit; such values are always out of the fixed range anyway.
 	return newFromFallback(u)
 }
 
-// NewFromDecimal is an alias for NewFromUDecimal for API compatibility naming.
-func NewFromDecimal(u udecimal.Decimal) Decimal {
-	return NewFromUDecimal(u)
-}
-
-func tryFixedFromUDecimal(u udecimal.Decimal) (fixed int64, ok bool, certain bool) {
-	neg, hi, lo, prec, fit := u.ToHiLo()
-	if !fit || hi != 0 {
-		return 0, false, fit
+func tryFixedFromZD(u zerodecimal.Decimal) (fixed int64, ok bool) {
+	neg, hi, lo, prec := u.ToHiLo()
+	if hi != 0 {
+		return 0, false
 	}
 
-	certain = true
 	if lo == 0 {
-		return 0, true, true
+		return 0, true
 	}
 
 	coef := lo
@@ -266,7 +241,7 @@ func tryFixedFromUDecimal(u udecimal.Decimal) (fixed int64, ok bool, certain boo
 	if p > precision {
 		divisor := pow10u[p-precision]
 		if coef%divisor != 0 {
-			return 0, false, true
+			return 0, false
 		}
 		coef /= divisor
 		p = precision
@@ -274,12 +249,12 @@ func tryFixedFromUDecimal(u udecimal.Decimal) (fixed int64, ok bool, certain boo
 
 	multiplier := pow10u[precision-p]
 	if coef > uint64(maxIntInFixed)/multiplier {
-		return 0, false, true
+		return 0, false
 	}
 
 	fixed = int64(coef * multiplier)
 	if neg {
 		fixed = -fixed
 	}
-	return fixed, true, true
+	return fixed, true
 }

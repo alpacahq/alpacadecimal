@@ -53,10 +53,13 @@ func TestTrigMatchesShopspring(t *testing.T) {
 	})
 
 	t.Run("huge argument", func(t *testing.T) {
-		// matches shopspring v1.4.0 (Truncate(19))
+		// matches shopspring v1.4.0 (Truncate(19)) except the final digit:
+		// the exact result needs 40 significant digits and the zerodecimal
+		// fallback's 128-bit coefficient holds at most 39, so the last
+		// fractional digit truncates (shopspring/udecimal: ...246099).
 		d := alpacadecimal.RequireFromString("100000000000000000000")
 		require.Equal(t, "1.5707963267948965612", d.Atan().String())
-		require.Equal(t, "101416272413079734262.2911750306376246099", d.Tan().String())
+		require.Equal(t, "101416272413079734262.291175030637624609", d.Tan().String())
 	})
 }
 
@@ -326,13 +329,12 @@ func TestRescalePair(t *testing.T) {
 	})
 
 	t.Run("coefficient beyond 128 bits", func(t *testing.T) {
-		d1 := alpacadecimal.RequireFromString("100000000000000000000000000000000000000000000000000")
-		d2 := alpacadecimal.RequireFromString("-1.5")
-		r1, r2 := alpacadecimal.RescalePair(d1, d2)
-		require.True(t, r1.Equal(d1))
-		require.True(t, r2.Equal(d2))
-		require.Equal(t, int32(-12), r1.Exponent())
-		require.Equal(t, int32(-12), r2.Exponent())
+		// DOMAIN DIVERGENCE (zerodecimal fallback): 10^50 exceeds the 128-bit
+		// coefficient domain, so parsing it errors instead of succeeding (the
+		// udecimal fallback stored it exactly via big.Int coefficients).
+		_, err := alpacadecimal.NewFromString("100000000000000000000000000000000000000000000000000")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "exceeds the 128-bit decimal domain")
 	})
 
 	t.Run("two fallbacks of different precision", func(t *testing.T) {

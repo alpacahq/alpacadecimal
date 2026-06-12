@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"math/bits"
 
-	"github.com/quagmt/udecimal"
+	zerodecimal "github.com/AlexandrosKyriakakis/zerodecimal"
 )
 
 type roundMode int
@@ -45,10 +45,10 @@ func (d Decimal) Round(places int32) Decimal {
 		return roundFixed(d, places, modeHAZ)
 	}
 	if places >= 0 {
-		if places >= int32(d.fallback.PrecUint()) {
+		if places >= int32(d.fallback.Prec()) {
 			return d // no fractional digits to round
 		}
-		return NewFromUDecimal(d.fallback.RoundHAZ(uint8(places)))
+		return NewFromDecimal(d.fallback.Round(uint8(places)))
 	}
 	return roundBigGeneric(d, places, modeHAZ)
 }
@@ -84,10 +84,10 @@ func (d Decimal) RoundBank(places int32) Decimal {
 		return roundFixed(d, places, modeHTE)
 	}
 	if places >= 0 {
-		if places >= int32(d.fallback.PrecUint()) {
+		if places >= int32(d.fallback.Prec()) {
 			return d // no fractional digits to round
 		}
-		return NewFromUDecimal(d.fallback.RoundBank(uint8(places)))
+		return NewFromDecimal(d.fallback.RoundBank(uint8(places)))
 	}
 	return roundBigGeneric(d, places, modeHTE)
 }
@@ -106,10 +106,10 @@ func (d Decimal) RoundDown(places int32) Decimal {
 		return roundFixed(d, places, modeDown)
 	}
 	if places >= 0 {
-		if places >= int32(d.fallback.PrecUint()) {
+		if places >= int32(d.fallback.Prec()) {
 			return d // no fractional digits to round
 		}
-		return NewFromUDecimal(d.fallback.Trunc(uint8(places)))
+		return NewFromDecimal(d.fallback.RoundDown(uint8(places)))
 	}
 	return roundBigGeneric(d, places, modeDown)
 }
@@ -128,10 +128,10 @@ func (d Decimal) RoundUp(places int32) Decimal {
 		return roundFixed(d, places, modeAway)
 	}
 	if places >= 0 {
-		if places >= int32(d.fallback.PrecUint()) {
+		if places >= int32(d.fallback.Prec()) {
 			return d // no fractional digits to round
 		}
-		return NewFromUDecimal(d.fallback.RoundAwayFromZero(uint8(places)))
+		return NewFromDecimal(d.fallback.RoundUp(uint8(places)))
 	}
 	return roundBigGeneric(d, places, modeAway)
 }
@@ -161,10 +161,10 @@ func (d Decimal) RoundCeil(places int32) Decimal {
 		return roundFixed(d, places, modeCeil)
 	}
 	if places >= 0 {
-		if places >= int32(d.fallback.PrecUint()) {
+		if places >= int32(d.fallback.Prec()) {
 			return d // no fractional digits to round
 		}
-		return roundFallbackDirected(*d.fallback, places, true)
+		return NewFromDecimal(d.fallback.RoundCeil(uint8(places)))
 	}
 	return roundBigGeneric(d, places, modeCeil)
 }
@@ -194,10 +194,10 @@ func (d Decimal) RoundFloor(places int32) Decimal {
 		return roundFixed(d, places, modeFloor)
 	}
 	if places >= 0 {
-		if places >= int32(d.fallback.PrecUint()) {
+		if places >= int32(d.fallback.Prec()) {
 			return d // no fractional digits to round
 		}
-		return roundFallbackDirected(*d.fallback, places, false)
+		return NewFromDecimal(d.fallback.RoundFloor(uint8(places)))
 	}
 	return roundBigGeneric(d, places, modeFloor)
 }
@@ -247,7 +247,7 @@ func (d Decimal) Ceil() Decimal {
 		}
 		return Decimal{fixed: d.fixed - m}
 	}
-	return NewFromUDecimal(d.fallback.Ceil())
+	return NewFromDecimal(d.fallback.Ceil())
 }
 
 // optimized:
@@ -263,7 +263,7 @@ func (d Decimal) Floor() Decimal {
 		}
 		return Decimal{fixed: d.fixed - m - scale}
 	}
-	return NewFromUDecimal(d.fallback.Floor())
+	return NewFromDecimal(d.fallback.Floor())
 }
 
 // optimized:
@@ -279,10 +279,10 @@ func (d Decimal) Truncate(precision int32) Decimal {
 		s := pow10Table[12-precision]
 		return Decimal{fixed: d.fixed - d.fixed%s}
 	}
-	if precision < 0 || precision >= int32(d.fallback.PrecUint()) {
+	if precision < 0 || precision >= int32(d.fallback.Prec()) {
 		return d
 	}
-	return NewFromUDecimal(d.fallback.Trunc(uint8(precision)))
+	return NewFromDecimal(d.fallback.Truncate(uint8(precision)))
 }
 
 // roundFixed rounds a fixed-representation decimal at 10^-places in the given
@@ -368,10 +368,7 @@ func roundFixed(d Decimal, places int32, mode roundMode) Decimal {
 // roundFallbackU128 rounds a fallback value at negative places using a single
 // 128-by-64 division when the divisor 10^(prec - places) fits in a uint64.
 func roundFallbackU128(d Decimal, places int32, mode roundMode) (Decimal, bool) {
-	neg, hi, lo, prec, ok := d.fallback.ToHiLo()
-	if !ok {
-		return Decimal{}, false
-	}
+	neg, hi, lo, prec := d.fallback.ToHiLo()
 	s := int32(prec) - places // digits to clear off the coefficient
 	if s <= 0 {
 		return d, true
@@ -419,29 +416,11 @@ func roundFallbackU128(d Decimal, places int32, mode roundMode) (Decimal, bool) 
 			return Decimal{}, false
 		}
 	}
-	u, err := udecimal.NewFromHiLo(neg, mhi, mlo, prec)
+	u, err := zerodecimal.NewFromHiLo(neg, mhi, mlo, prec)
 	if err != nil {
 		return Decimal{}, false
 	}
-	return NewFromUDecimal(u), true
-}
-
-// roundFallbackDirected implements RoundCeil/RoundFloor for fallback values at
-// places in [0, 19).
-func roundFallbackDirected(fb udecimal.Decimal, places int32, ceil bool) Decimal {
-	t := fb.Trunc(uint8(places))
-	if t.Equal(fb) {
-		return NewFromUDecimal(t)
-	}
-	if ceil == fb.IsPos() {
-		unit, _ := udecimal.NewFromUint64(1, uint8(places))
-		if ceil {
-			t = t.Add(unit)
-		} else {
-			t = t.Sub(unit)
-		}
-	}
-	return NewFromUDecimal(t)
+	return NewFromDecimal(u), true
 }
 
 // roundBigGeneric rounds at 10^-places (places typically < 0 here) using

@@ -321,7 +321,7 @@ func RescalePair(d1 Decimal, d2 Decimal) (Decimal, Decimal) {
 // and the rescale (adding trailing zeros to the coefficient) is exact.
 func rescaleToExp(d Decimal, e int32) Decimal {
 	if d.IsZero() {
-		// udecimal normalizes a zero coefficient to precision 0, so a zero
+		// zerodecimal normalizes a zero coefficient to precision 0, so a zero
 		// cannot carry an arbitrary exponent; return it unchanged.
 		return d
 	}
@@ -329,15 +329,13 @@ func rescaleToExp(d Decimal, e int32) Decimal {
 	if shift := int64(exp) - int64(e); shift > 0 {
 		coef = new(big.Int).Mul(coef, bigPow10(shift))
 	}
-	u := udecFromBig(coef, uint8(-e))
-	if int32(u.PrecUint()) != -e {
-		// the >128-bit coefficient path can come back at full (19-digit)
-		// precision with extra trailing zeros; truncating them is exact
-		u = u.Trunc(uint8(-e))
-	}
+	// zdFromBig keeps the requested precision verbatim whenever the rescaled
+	// coefficient fits 128 bits; otherwise it degrades precision (truncating
+	// exactly the trailing zeros this rescale added, or out-of-domain digits).
+	u := zdFromBig(coef, uint8(-e))
 	if e == -precision {
 		// the fixed representation also reports Exponent() == -12
-		return NewFromUDecimal(u)
+		return NewFromDecimal(u)
 	}
 	return newFromFallback(u)
 }

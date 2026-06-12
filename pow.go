@@ -51,7 +51,7 @@ func (d Decimal) intPartInt32() (int32, bool) {
 		// |fixed/scale| <= 9_223_372 always fits int32
 		return int32(d.fixed / scale), true
 	}
-	v, err := d.fallback.Int64()
+	v, err := d.fallback.IntPart()
 	if err != nil || v > 1<<31-1 || v < -(1<<31) {
 		return 0, false
 	}

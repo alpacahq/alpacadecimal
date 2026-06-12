@@ -3,20 +3,33 @@
 //
 // alpacadecimal uses an optimized fixed-point representation for values where
 // |integer part| <= 9,223,372 with up to 12 fractional digits. Larger values
-// fall back to udecimal, which supports up to 19 fractional digits and
-// arbitrarily large magnitudes (coefficients beyond 128 bits transparently
-// switch to a big.Int representation).
+// fall back to zerodecimal, which is bounded: a 128-bit coefficient with 0..19
+// fractional digits and NO big.Int escape. Two boundaries shape the suite:
 //
-// The 19-fractional-digit limit is the one real representational boundary:
-// values needing more fractional digits are truncated by alpacadecimal while
-// shopspring keeps arbitrary precision, so tests skip or truncate-compare only
-// in that regime. maxAbsValue additionally caps most test magnitudes at 10^19.
-// That cap is pragmatic — larger magnitudes are representable — it simply
-// bounds the region where both libraries are exercised together at full
-// precision with reasonable runtime.
+//   - 128-bit domain: a value is representable iff trunc(|v|) < 2^128
+//     (~3.4e38). Parse/decode paths (NewFromString, UnmarshalBinary,
+//     UnmarshalJSON, UnmarshalText, Scan) return an error containing
+//     "exceeds the 128-bit decimal domain" for out-of-domain values, while
+//     infallible paths (arithmetic, constructors) panic with domainPanicMsg.
+//     The checkOp/domainGuard helpers assert an iff discipline: the
+//     panic/error is accepted exactly when the shopspring reference value is
+//     out of domain, and is a test failure otherwise.
+//
+//   - 19 fractional digits: values needing more are truncated by
+//     alpacadecimal while shopspring keeps arbitrary precision, so tests skip
+//     or truncate-compare in that regime. Additionally, when the coefficient
+//     at the current precision exceeds 2^128, fractional digits are truncated
+//     toward zero one at a time until it fits, so in-domain results can carry
+//     FEWER than 19 fractional digits; domainAdjust models this exactly.
+//
+// maxAbsValue additionally caps most test magnitudes at 10^19. That cap is
+// pragmatic — magnitudes up to 2^128 are representable — it simply bounds the
+// region where both libraries are exercised together at full precision with
+// reasonable runtime.
 package fuzz
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -27,7 +40,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/quagmt/udecimal"
+	zerodecimal "github.com/AlexandrosKyriakakis/zerodecimal"
 	shopspring "github.com/shopspring/decimal"
 
 	alpaca "github.com/alpacahq/alpacadecimal"
@@ -42,10 +55,10 @@ import (
 // while shopspring preserves arbitrary precision.
 const maxPrec = 19
 
-// maxAbsValue is a pragmatic 10^19 cap on test inputs. It is not a
-// representability limit (alpacadecimal handles larger magnitudes exactly via
-// big.Int coefficients); it bounds the region where both libraries are
-// compared at full precision while keeping fuzz throughput high.
+// maxAbsValue is a pragmatic 10^19 cap on test inputs. It is not the
+// representability limit (that is 2^128; see the package comment); it bounds
+// the region where both libraries are compared at full precision while
+// keeping fuzz throughput high.
 var maxAbsValue = alpaca.RequireFromString("10000000000000000000")
 
 // shopMaxAbs is maxAbsValue as a shopspring decimal.
@@ -143,16 +156,198 @@ func compare(t *testing.T, op string, alpacaResult alpaca.Decimal, shopResult sh
 	}
 }
 
-// compareTruncated truncates both results to the given number of decimal
-// places before comparing. This accounts for operations whose exact result
-// exceeds 19 fractional digits, where alpacadecimal truncates while shopspring
-// keeps arbitrary precision (e.g. multiplication).
-func compareTruncated(t *testing.T, op string, alpacaResult alpaca.Decimal, shopResult shopspring.Decimal, places int32) {
+// ---------------------------------------------------------------------------
+// 128-bit domain modeling
+// ---------------------------------------------------------------------------
+
+// twoPow128 is the first integer magnitude alpacadecimal cannot represent:
+// zerodecimal coefficients are 128-bit, so trunc(|v|) must stay below 2^128.
+var twoPow128 = shopspring.NewFromBigInt(new(big.Int).Lsh(big.NewInt(1), 128), 0)
+
+// domainPanicMsg is the exact panic value used by infallible alpacadecimal
+// paths for out-of-domain values. NewFromFloat wraps it with a prefix, so its
+// panic merely contains the marker substring; see domainGuard.
+const domainPanicMsg = "alpacadecimal: value exceeds the 128-bit decimal domain (|value| >= 2^128)"
+
+// isDomainError reports whether err is the parse/decode-path counterpart of
+// the domain panic.
+func isDomainError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "exceeds the 128-bit decimal domain")
+}
+
+// outOfDomain is the exact predicate for "alpacadecimal must reject (parse
+// paths) or panic (infallible paths)": trunc(|sd|) >= 2^128. Only the integer
+// part matters — excess fractional digits are truncated, never rejected.
+//
+// The digit-count fast paths are pure optimization/hardening: 2^128 has 39
+// decimal digits, so any 40+-digit integer part is out and any <=38-digit one
+// is in. They keep decoded garbage with astronomical exponents (which
+// shopspring stores lazily but Cmp/Truncate would materialize eagerly) from
+// allocating gigantic big.Ints.
+func outOfDomain(sd shopspring.Decimal) bool {
+	if sd.IsZero() {
+		return false
+	}
+	// 10^(digits+exp-1) <= |sd| < 10^(digits+exp)
+	intDigits := int64(sd.NumDigits()) + int64(sd.Exponent())
+	if intDigits >= 40 {
+		return true // |sd| >= 10^39 > 2^128
+	}
+	if intDigits <= 38 {
+		return false // |sd| < 10^38 < 2^128
+	}
+	return sd.Abs().Truncate(0).Cmp(twoPow128) >= 0
+}
+
+// domainAdjust models alpacadecimal's bounded representation of sd: ok is
+// false when the value is out of the 128-bit domain entirely (alpacadecimal
+// rejects or panics); otherwise fractional digits are truncated toward zero
+// one at a time until the coefficient fits 128 bits, mirroring
+// decimalFromBigParts/zdFromBigOK in the main package. Callers must apply the
+// 19-fractional-digit truncation convention BEFORE calling domainAdjust, so
+// that the returned value's digits are exactly the digits alpacadecimal
+// stores.
+//
+// shopspring representations can carry positive exponents (small coefficient,
+// large exponent) and Truncate(0) does NOT materialize the digits in that
+// case (verified: New(5, 40).Truncate(0) keeps coef=5/exp=40), so such values
+// are rebuilt via NewFromBigInt instead. They are integers, so once they pass
+// the outOfDomain gate the materialized coefficient trunc(|v|) already fits
+// 128 bits and no truncation loop is needed.
+func domainAdjust(sd shopspring.Decimal) (shopspring.Decimal, bool) {
+	if outOfDomain(sd) {
+		return sd, false
+	}
+	if sd.Exponent() > 0 {
+		// Integer-valued: materialize the digits (value-preserving; BigInt()
+		// is exact for integers).
+		return shopspring.NewFromBigInt(sd.BigInt(), 0), true
+	}
+	for new(big.Int).Abs(sd.Coefficient()).BitLen() > 128 {
+		frac := -sd.Exponent()
+		if frac <= 0 {
+			break // unreachable for in-domain values; defensive
+		}
+		sd = sd.Truncate(frac - 1)
+	}
+	return sd, true
+}
+
+// domainGuard runs fn and recovers ONLY the documented domain panic: the
+// exact domainPanicMsg string, or a string containing the marker substring
+// (NewFromFloat wraps the message). Any other panic is re-raised, preserving
+// the suite-wide discipline that unexpected panics crash the fuzz target.
+func domainGuard(fn func()) (panicked bool) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		if msg, ok := r.(string); ok &&
+			(msg == domainPanicMsg || strings.Contains(msg, "exceeds the 128-bit decimal domain")) {
+			panicked = true
+			return
+		}
+		panic(r)
+	}()
+	fn()
+	return false
+}
+
+// compareAdjusted compares an already-computed alpacadecimal result against
+// the domain-adjusted shopspring expectation. The caller must already have
+// applied the 19-fractional-digit truncation convention to shopResult where
+// the operation requires it. It fails when the expectation is out of domain —
+// alpacadecimal should have panicked instead of producing a result.
+func compareAdjusted(t *testing.T, op string, alpacaResult alpaca.Decimal, shopResult shopspring.Decimal) {
 	t.Helper()
-	a := alpacaResult.Truncate(places).String()
-	s := shopResult.Truncate(places).String()
-	if a != s {
-		t.Errorf("%s: alpaca=%q shopspring=%q (truncated to %d)", op, a, s, places)
+	adjusted, ok := domainAdjust(shopResult)
+	if !ok {
+		t.Errorf("%s: alpaca=%q but expected a domain panic (shopspring=%q is out of domain)",
+			op, alpacaResult.String(), shopResult.String())
+		return
+	}
+	compare(t, op, alpacaResult, adjusted)
+}
+
+// checkOpAt implements checkOp and checkOpTruncated: it runs alpacaFn under
+// domainGuard and asserts the iff discipline. places < 0 means "compare
+// exactly"; places >= 0 truncates both sides first (the old compareTruncated
+// convention, for operations whose exact result may exceed 19 fractional
+// digits).
+func checkOpAt(t *testing.T, op string, alpacaFn func() alpaca.Decimal, shopResult shopspring.Decimal, places int32) {
+	t.Helper()
+	var aResult alpaca.Decimal
+	if domainGuard(func() { aResult = alpacaFn() }) {
+		// A domain panic is correct iff the exact expected value is out of
+		// domain. Fractional truncation never changes the integer part, so
+		// the untruncated shopResult is the right predicate input for
+		// truncated operations too.
+		if !outOfDomain(shopResult) {
+			t.Errorf("%s: spurious domain panic (shopspring=%q is in domain)", op, shopResult.String())
+		}
+		return
+	}
+	expected := shopResult
+	if places >= 0 {
+		aResult = aResult.Truncate(places)
+		expected = expected.Truncate(places)
+	}
+	compareAdjusted(t, op, aResult, expected)
+}
+
+// checkOp wraps an alpacadecimal operation that returns a Decimal and is
+// compared exactly (the compare convention): a domain panic is accepted iff
+// the shopspring result is out of the 128-bit domain, and otherwise the
+// result must match the domain-adjusted shopspring expectation exactly.
+func checkOp(t *testing.T, op string, alpacaFn func() alpaca.Decimal, shopResult shopspring.Decimal) {
+	t.Helper()
+	checkOpAt(t, op, alpacaFn, shopResult, -1)
+}
+
+// checkOpTruncated is checkOp for operations whose exact result may exceed 19
+// fractional digits (e.g. multiplication): both sides are truncated to places
+// before the domain adjustment and comparison.
+func checkOpTruncated(t *testing.T, op string, alpacaFn func() alpaca.Decimal, shopResult shopspring.Decimal, places int32) {
+	t.Helper()
+	checkOpAt(t, op, alpacaFn, shopResult, places)
+}
+
+// checkOp2 is the domainGuard front half of checkOp for operations returning
+// two Decimals (QuoRem). It reports whether the call completed without a
+// domain panic; the caller compares the returned values (via compareAdjusted)
+// and runs its property checks only in that case.
+func checkOp2(t *testing.T, op string, alpacaFn func() (alpaca.Decimal, alpaca.Decimal), shopFirst, shopSecond shopspring.Decimal) (alpaca.Decimal, alpaca.Decimal, bool) {
+	t.Helper()
+	var r1, r2 alpaca.Decimal
+	if domainGuard(func() { r1, r2 = alpacaFn() }) {
+		if !outOfDomain(shopFirst) && !outOfDomain(shopSecond) {
+			t.Errorf("%s: spurious domain panic (shopspring=(%q, %q) is in domain)",
+				op, shopFirst.String(), shopSecond.String())
+		}
+		return alpaca.Decimal{}, alpaca.Decimal{}, false
+	}
+	return r1, r2, true
+}
+
+// checkOpString is checkOp for operations returning a string (the StringFixed
+// family). shopOperand is the value being formatted: formatting at
+// non-negative places never pushes the integer part past the operand's
+// magnitude by more than one, so a domain panic is correct iff the operand
+// itself is out of domain — which parseBoth-gated call sites can never
+// produce, making the guard documentation of the iff rule rather than an
+// expected occurrence.
+func checkOpString(t *testing.T, op string, alpacaFn func() string, want string, shopOperand shopspring.Decimal) {
+	t.Helper()
+	var got string
+	if domainGuard(func() { got = alpacaFn() }) {
+		if !outOfDomain(shopOperand) {
+			t.Errorf("%s: spurious domain panic (shopspring operand %q is in domain)", op, shopOperand.String())
+		}
+		return
+	}
+	if got != want {
+		t.Errorf("%s: alpaca=%q shopspring=%q", op, got, want)
 	}
 }
 
@@ -229,7 +424,10 @@ func randDecimalString(rng *rand.Rand) string {
 
 // FuzzNew tests New(value, exp) and NewFromBigInt(big.Int, exp) against
 // shopspring for integer coefficients with various exponents.
-// shopspring never panics here, so neither call is guarded.
+// shopspring never panics here, but value*10^exp can leave the 128-bit
+// domain (e.g. 9e18 * 10^30), where alpacadecimal panics by contract — so
+// both calls go through checkOp, which accepts the domain panic iff the
+// value is out of domain.
 func FuzzNew(f *testing.F) {
 	for _, v := range []int64{0, 1, -1, 100, -100, 123, -456, 999999999, 9223372, -9223372, 9223373} {
 		for _, e := range []int32{-19, -12, -5, -2, 0, 2, 5, 20} {
@@ -244,14 +442,14 @@ func FuzzNew(f *testing.F) {
 			return
 		}
 
-		aNew := alpaca.New(value, exp)
 		sNew := shopspring.New(value, exp)
-		compare(t, fmt.Sprintf("New(%d, %d)", value, exp), aNew, sNew)
+		checkOp(t, fmt.Sprintf("New(%d, %d)", value, exp),
+			func() alpaca.Decimal { return alpaca.New(value, exp) }, sNew)
 
 		bi := big.NewInt(value)
-		aBig := alpaca.NewFromBigInt(bi, exp)
 		sBig := shopspring.NewFromBigInt(bi, exp)
-		compare(t, fmt.Sprintf("NewFromBigInt(%d, %d)", value, exp), aBig, sBig)
+		checkOp(t, fmt.Sprintf("NewFromBigInt(%d, %d)", value, exp),
+			func() alpaca.Decimal { return alpaca.NewFromBigInt(bi, exp) }, sBig)
 	})
 }
 
@@ -407,9 +605,14 @@ func FuzzNewFromFloatWithExponent(f *testing.F) {
 // parity, panic agreement, round-trip stability, and value equality.
 //
 // ERROR PARITY: alpacadecimal must return an error exactly when shopspring
-// does, except for documented representational limits — values needing more
-// than 19 fractional digits or |v| > 10^19, where alpacadecimal may truncate
-// (default parse mode) yet still succeed.
+// does, except for two documented limits:
+//   - 128-bit domain: values whose integer part reaches 2^128 MUST be
+//     rejected with the domain error even though shopspring accepts them
+//     (and accepting them, or raising the domain error for an in-domain
+//     value, is a failure);
+//   - representational truncation: values needing more than 19 fractional
+//     digits or |v| > 10^19 may truncate (default parse mode) yet still
+//     succeed.
 func FuzzNewFromString(f *testing.F) {
 	seeds := []string{
 		"0", "1", "-1", "0.5", "-0.5",
@@ -434,7 +637,14 @@ func FuzzNewFromString(f *testing.F) {
 		".-5", ".+0", ".-5e2",
 		// malformed
 		"", "-", "+", "1e", "e5", "abc", " 1", "1 ",
-		// long inputs (well beyond udecimal's 200-char parser limit)
+		// the 128-bit domain boundary: 2^128-1 parses, 2^128 is rejected
+		"340282366920938463463374607431768211455",
+		"-340282366920938463463374607431768211455",
+		"340282366920938463463374607431768211456",
+		"-340282366920938463463374607431768211456",
+		"340282366920938463463374607431768211455.99",
+		"340282366920938463463374607431768211456.01",
+		// long inputs
 		strings.Repeat("9", 250),
 		"1." + strings.Repeat("3", 249),
 		"-" + strings.Repeat("7", 120) + "." + strings.Repeat("1", 130),
@@ -456,6 +666,26 @@ func FuzzNewFromString(f *testing.F) {
 
 		shopD, shopErr := shopspring.NewFromString(s)
 		d, err := alpaca.NewFromString(s)
+
+		// 128-bit domain rules (iff): out-of-domain values must be rejected
+		// with the domain error; in-domain values must never raise it.
+		if shopErr == nil {
+			if outOfDomain(shopD) {
+				if err == nil {
+					t.Errorf("NewFromString(%q) accepted out-of-domain value: alpaca=%s shopspring=%s",
+						s, d.String(), shopD.String())
+					return
+				}
+				if !isDomainError(err) {
+					t.Errorf("NewFromString(%q): expected domain error for out-of-domain value %s, got: %v",
+						s, shopD.String(), err)
+				}
+			} else if isDomainError(err) {
+				t.Errorf("NewFromString(%q): spurious domain error for in-domain value %s: %v",
+					s, shopD.String(), err)
+				return
+			}
+		}
 
 		// Documented representational exemption (see the fuzz doc comment).
 		exempt := shopErr == nil && !comparableValue(shopD)
@@ -588,14 +818,17 @@ func FuzzArithmetic(f *testing.F) {
 
 		// --- Binary arithmetic ---
 
-		compare(t, fmt.Sprintf("Add(%s, %s)", aStr, bStr), a.Add(b), shopA.Add(shopB))
-		compare(t, fmt.Sprintf("Sub(%s, %s)", aStr, bStr), a.Sub(b), shopA.Sub(shopB))
+		checkOp(t, fmt.Sprintf("Add(%s, %s)", aStr, bStr),
+			func() alpaca.Decimal { return a.Add(b) }, shopA.Add(shopB))
+		checkOp(t, fmt.Sprintf("Sub(%s, %s)", aStr, bStr),
+			func() alpaca.Decimal { return a.Sub(b) }, shopA.Sub(shopB))
 
 		// Mul: the exact product may need up to 38 fractional digits;
-		// alpacadecimal truncates at 19 while shopspring keeps all of them.
-		// Truncate both to 19 to compare (exact match within that range).
-		compareTruncated(t, fmt.Sprintf("Mul(%s, %s)", aStr, bStr),
-			a.Mul(b), shopA.Mul(shopB), maxPrec)
+		// alpacadecimal truncates at 19 while shopspring keeps all of them
+		// (and may truncate further so the coefficient fits 128 bits —
+		// checkOpTruncated's domain adjustment models that).
+		checkOpTruncated(t, fmt.Sprintf("Mul(%s, %s)", aStr, bStr),
+			func() alpaca.Decimal { return a.Mul(b) }, shopA.Mul(shopB), maxPrec)
 
 		if b.IsZero() {
 			// Panic parity: shopspring panics on division by zero, so
@@ -604,9 +837,12 @@ func FuzzArithmetic(f *testing.F) {
 			assertPanics(t, fmt.Sprintf("Mod(%s, 0)", aStr), func() { a.Mod(b) })
 		} else {
 			// Both libraries round the quotient at DivisionPrecision=16, so
-			// the results must match exactly.
-			compare(t, fmt.Sprintf("Div(%s, %s)", aStr, bStr), a.Div(b), shopA.Div(shopB))
-			compare(t, fmt.Sprintf("Mod(%s, %s)", aStr, bStr), a.Mod(b), shopA.Mod(shopB))
+			// the results must match exactly (after domain adjustment when
+			// the 16-fractional-digit coefficient exceeds 128 bits).
+			checkOp(t, fmt.Sprintf("Div(%s, %s)", aStr, bStr),
+				func() alpaca.Decimal { return a.Div(b) }, shopA.Div(shopB))
+			checkOp(t, fmt.Sprintf("Mod(%s, %s)", aStr, bStr),
+				func() alpaca.Decimal { return a.Mod(b) }, shopA.Mod(shopB))
 		}
 
 		// --- Comparison operators ---
@@ -670,9 +906,9 @@ func FuzzDivRound(f *testing.F) {
 			return
 		}
 
-		aResult := a.DivRound(b, p)
 		sResult := shopA.DivRound(shopB, p)
-		compare(t, fmt.Sprintf("DivRound(%s, %s, %d)", aStr, bStr, p), aResult, sResult)
+		checkOp(t, fmt.Sprintf("DivRound(%s, %s, %d)", aStr, bStr, p),
+			func() alpaca.Decimal { return a.DivRound(b, p) }, sResult)
 	})
 }
 
@@ -728,8 +964,12 @@ func FuzzQuoRem(f *testing.F) {
 			return
 		}
 
-		aQ, aR := a.QuoRem(b, p)
 		sQ, sR := shopA.QuoRem(shopB, p)
+		aQ, aR, ok := checkOp2(t, fmt.Sprintf("QuoRem(%s, %s, %d)", aStr, bStr, p),
+			func() (alpaca.Decimal, alpaca.Decimal) { return a.QuoRem(b, p) }, sQ, sR)
+		if !ok {
+			return
+		}
 
 		// Canonical fractional digits of the operands (trailing zeros trimmed).
 		maxFrac := fracDigitsOf(shopA.String())
@@ -739,15 +979,20 @@ func FuzzQuoRem(f *testing.F) {
 
 		if maxFrac+int(p) > maxPrec {
 			// The exact remainder may need more than 19 fractional digits,
-			// where alpacadecimal truncates. The quotient is still
-			// representable (at most p fractional digits) and must match.
-			compare(t, fmt.Sprintf("QuoRem_q(%s, %s, %d) [r beyond 19 digits]", aStr, bStr, p), aQ, sQ)
+			// where alpacadecimal truncates. The quotient has at most p
+			// fractional digits and must match after domain adjustment (its
+			// coefficient can exceed 128 bits, e.g. a 10^38-magnitude
+			// quotient at precision 19).
+			compareAdjusted(t, fmt.Sprintf("QuoRem_q(%s, %s, %d) [r beyond 19 digits]", aStr, bStr, p), aQ, sQ)
 			return
 		}
 
-		// Property 1: cross-library agreement, exact.
-		compare(t, fmt.Sprintf("QuoRem_q(%s, %s, %d)", aStr, bStr, p), aQ, sQ)
-		compare(t, fmt.Sprintf("QuoRem_r(%s, %s, %d)", aStr, bStr, p), aR, sR)
+		// Property 1: cross-library agreement, exact. In this regime
+		// (operand magnitudes <= 10^19, maxFrac+p <= 19) both q and r have
+		// coefficients below 2^128, so domain adjustment is an identity and
+		// the comparison stays exact.
+		compareAdjusted(t, fmt.Sprintf("QuoRem_q(%s, %s, %d)", aStr, bStr, p), aQ, sQ)
+		compareAdjusted(t, fmt.Sprintf("QuoRem_r(%s, %s, %d)", aStr, bStr, p), aR, sR)
 
 		// Re-parse alpacadecimal's outputs into shopspring for exact (big.Int)
 		// arithmetic in the property checks below.
@@ -818,20 +1063,17 @@ func FuzzPow(f *testing.F) {
 		shopBase = shopspring.RequireFromString(shopBase.String())
 		shopExp = shopspring.RequireFromString(shopExp.String())
 
-		// No safeCall here: shopspring.Pow never panics for these inputs
-		// (0^0, 0^negative and negative^fractional all return 0), so
-		// alpacadecimal must not panic either.
-		aResult := base.Pow(exp)
+		// shopspring.Pow never panics for these inputs (0^0, 0^negative and
+		// negative^fractional all return 0), but the result can leave the
+		// 128-bit domain (e.g. (10^19)^10), where alpacadecimal panics by
+		// contract. checkOpTruncated accepts the domain panic iff the exact
+		// result is out of domain; in-domain results are compared after the
+		// 19-fractional-digit truncation plus domain adjustment (results
+		// with <=19 fractional digits are untouched by the truncation, so
+		// the comparison stays exact there).
 		sResult := shopBase.Pow(shopExp)
-
-		op := fmt.Sprintf("Pow(%s, %s)", baseStr, expStr)
-		if fracDigitsOf(sResult.String()) <= maxPrec {
-			compare(t, op, aResult, sResult)
-		} else {
-			// The exact result needs >19 fractional digits, where
-			// alpacadecimal truncates.
-			compareTruncated(t, op, aResult, sResult, maxPrec)
-		}
+		checkOpTruncated(t, fmt.Sprintf("Pow(%s, %s)", baseStr, expStr),
+			func() alpaca.Decimal { return base.Pow(exp) }, sResult, maxPrec)
 	})
 }
 
@@ -860,7 +1102,8 @@ func FuzzShift(f *testing.F) {
 			return
 		}
 
-		compare(t, fmt.Sprintf("Shift(%s, %d)", s, shift), a.Shift(shift), shopD.Shift(shift))
+		checkOp(t, fmt.Sprintf("Shift(%s, %d)", s, shift),
+			func() alpaca.Decimal { return a.Shift(shift) }, shopD.Shift(shift))
 	})
 }
 
@@ -903,13 +1146,24 @@ func FuzzRounding(f *testing.F) {
 			return
 		}
 
-		compare(t, fmt.Sprintf("Round(%s, %d)", s, p), a.Round(p), shopD.Round(p))
-		compare(t, fmt.Sprintf("RoundBank(%s, %d)", s, p), a.RoundBank(p), shopD.RoundBank(p))
-		compare(t, fmt.Sprintf("RoundCeil(%s, %d)", s, p), a.RoundCeil(p), shopD.RoundCeil(p))
-		compare(t, fmt.Sprintf("RoundFloor(%s, %d)", s, p), a.RoundFloor(p), shopD.RoundFloor(p))
-		compare(t, fmt.Sprintf("RoundUp(%s, %d)", s, p), a.RoundUp(p), shopD.RoundUp(p))
-		compare(t, fmt.Sprintf("RoundDown(%s, %d)", s, p), a.RoundDown(p), shopD.RoundDown(p))
-		compare(t, fmt.Sprintf("Truncate(%s, %d)", s, p), a.Truncate(p), shopD.Truncate(p))
+		// Rounding at negative places is an infallible path that panics for
+		// out-of-domain results, so the calls go through checkOp (inputs are
+		// capped at 10^19, so rounding at places >= -30 stays in domain and
+		// the guard documents the iff rule rather than an expected panic).
+		checkOp(t, fmt.Sprintf("Round(%s, %d)", s, p),
+			func() alpaca.Decimal { return a.Round(p) }, shopD.Round(p))
+		checkOp(t, fmt.Sprintf("RoundBank(%s, %d)", s, p),
+			func() alpaca.Decimal { return a.RoundBank(p) }, shopD.RoundBank(p))
+		checkOp(t, fmt.Sprintf("RoundCeil(%s, %d)", s, p),
+			func() alpaca.Decimal { return a.RoundCeil(p) }, shopD.RoundCeil(p))
+		checkOp(t, fmt.Sprintf("RoundFloor(%s, %d)", s, p),
+			func() alpaca.Decimal { return a.RoundFloor(p) }, shopD.RoundFloor(p))
+		checkOp(t, fmt.Sprintf("RoundUp(%s, %d)", s, p),
+			func() alpaca.Decimal { return a.RoundUp(p) }, shopD.RoundUp(p))
+		checkOp(t, fmt.Sprintf("RoundDown(%s, %d)", s, p),
+			func() alpaca.Decimal { return a.RoundDown(p) }, shopD.RoundDown(p))
+		checkOp(t, fmt.Sprintf("Truncate(%s, %d)", s, p),
+			func() alpaca.Decimal { return a.Truncate(p) }, shopD.Truncate(p))
 	})
 }
 
@@ -948,10 +1202,18 @@ func FuzzRoundDown(f *testing.F) {
 			return
 		}
 
-		rd := a.RoundDown(p)
+		// Inputs are capped at 10^19, so RoundDown at places >= -30 cannot
+		// leave the domain; the guard documents the iff rule.
+		var rd alpaca.Decimal
+		if domainGuard(func() { rd = a.RoundDown(p) }) {
+			if !outOfDomain(shopD.RoundDown(p)) {
+				t.Errorf("RoundDown(%s, %d): spurious domain panic", s, p)
+			}
+			return
+		}
 
 		// Property 1: cross-library agreement.
-		compare(t, fmt.Sprintf("RoundDown(%s, %d)", s, p), rd, shopD.RoundDown(p))
+		compareAdjusted(t, fmt.Sprintf("RoundDown(%s, %d)", s, p), rd, shopD.RoundDown(p))
 
 		// Property 2: idempotence.
 		rd2 := rd.RoundDown(p)
@@ -983,8 +1245,10 @@ func FuzzCeilFloor(f *testing.F) {
 			return
 		}
 
-		compare(t, fmt.Sprintf("Ceil(%s)", s), a.Ceil(), shopD.Ceil())
-		compare(t, fmt.Sprintf("Floor(%s)", s), a.Floor(), shopD.Floor())
+		checkOp(t, fmt.Sprintf("Ceil(%s)", s),
+			func() alpaca.Decimal { return a.Ceil() }, shopD.Ceil())
+		checkOp(t, fmt.Sprintf("Floor(%s)", s),
+			func() alpaca.Decimal { return a.Floor() }, shopD.Floor())
 	})
 }
 
@@ -1010,12 +1274,12 @@ func FuzzRoundCash(f *testing.F) {
 			return
 		}
 
-		compare(t, fmt.Sprintf("RoundCash(%s, %d)", s, interval),
-			a.RoundCash(interval), shopD.RoundCash(interval))
+		checkOp(t, fmt.Sprintf("RoundCash(%s, %d)", s, interval),
+			func() alpaca.Decimal { return a.RoundCash(interval) }, shopD.RoundCash(interval))
 
-		if got, want := a.StringFixedCash(interval), shopD.StringFixedCash(interval); got != want {
-			t.Errorf("StringFixedCash(%s, %d): alpaca=%q shopspring=%q", s, interval, got, want)
-		}
+		checkOpString(t, fmt.Sprintf("StringFixedCash(%s, %d)", s, interval),
+			func() string { return a.StringFixedCash(interval) },
+			shopD.StringFixedCash(interval), shopD)
 	})
 }
 
@@ -1044,13 +1308,13 @@ func FuzzAggregates(f *testing.F) {
 			return
 		}
 
-		compare(t, fmt.Sprintf("Sum(%s, %s)", aStr, bStr),
-			alpaca.Sum(a, b), shopspring.Sum(shopA, shopB))
+		checkOp(t, fmt.Sprintf("Sum(%s, %s)", aStr, bStr),
+			func() alpaca.Decimal { return alpaca.Sum(a, b) }, shopspring.Sum(shopA, shopB))
 
 		// Avg = Sum/n; both libraries round at DivisionPrecision=16, so the
 		// results must match exactly.
-		compare(t, fmt.Sprintf("Avg(%s, %s)", aStr, bStr),
-			alpaca.Avg(a, b), shopspring.Avg(shopA, shopB))
+		checkOp(t, fmt.Sprintf("Avg(%s, %s)", aStr, bStr),
+			func() alpaca.Decimal { return alpaca.Avg(a, b) }, shopspring.Avg(shopA, shopB))
 
 		compare(t, fmt.Sprintf("Max(%s, %s)", aStr, bStr),
 			alpaca.Max(a, b), shopspring.Max(shopA, shopB))
@@ -1134,7 +1398,7 @@ func FuzzIntrospection(f *testing.F) {
 
 // FuzzConversions tests type conversion and internal-state inspection methods:
 // BigInt, BigFloat, Rat, Coefficient/CoefficientInt64, Exponent, IsOptimized,
-// GetFixed, GetFallback, Equals (deprecated), and NewFromUDecimal.
+// GetFixed, GetFallback, Equals (deprecated), and NewFromDecimal.
 func FuzzConversions(f *testing.F) {
 	seeds := append([]string{
 		"0", "1", "-1", "1.5", "-1.5",
@@ -1178,30 +1442,14 @@ func FuzzConversions(f *testing.F) {
 
 		// --- Coefficient/Exponent self-consistency ---
 		// The contract: Coefficient * 10^Exponent == original value.
-		//
-		// Known bug: for fallback values backed by a big.Int coefficient
-		// (udecimal's ToHiLo fails), Coefficient() is derived from the
-		// trimmed string form while Exponent() reports the untrimmed
-		// PrecUint, so they can disagree by trailing-zero factors of ten:
-		// parsing "-000000000000000000000000000000000.0000010" yields
-		// Coefficient=-1 with Exponent=-7, reconstructing to -0.0000001
-		// instead of -0.000001.
-		// TODO: fix Coefficient/Exponent consistency in the main package,
-		// then remove this carve-out.
-		coefExpConsistent := true
-		if fb := a.GetFallback(); fb != nil {
-			if _, _, _, _, ok := fb.ToHiLo(); !ok {
-				coefExpConsistent = false
-			}
-		}
+		// (zerodecimal's ToHiLo is total, so the udecimal-era big.Int
+		// coefficient carve-out is gone.)
 		aExp := a.Exponent()
 		aCoef := a.Coefficient()
-		if coefExpConsistent {
-			reconstructed := alpaca.NewFromBigInt(aCoef, aExp)
-			if !reconstructed.Equal(a) {
-				t.Errorf("Coefficient*10^Exponent(%s): reconstructed=%s original=%s (coef=%s, exp=%d)",
-					s, reconstructed.String(), a.String(), aCoef.String(), aExp)
-			}
+		reconstructed := alpaca.NewFromBigInt(aCoef, aExp)
+		if !reconstructed.Equal(a) {
+			t.Errorf("Coefficient*10^Exponent(%s): reconstructed=%s original=%s (coef=%s, exp=%d)",
+				s, reconstructed.String(), a.String(), aCoef.String(), aExp)
 		}
 
 		// CoefficientInt64 must agree with Coefficient when the latter fits in int64.
@@ -1229,18 +1477,13 @@ func FuzzConversions(f *testing.F) {
 			t.Errorf("Equals vs Equal(%s): mismatch", s)
 		}
 
-		// --- NewFromUDecimal / NewFromDecimal ---
-		// Parse s as udecimal and verify round-trip through NewFromUDecimal.
-		ud, err := udecimal.Parse(s)
+		// --- NewFromDecimal ---
+		// Parse s as zerodecimal and verify round-trip through NewFromDecimal.
+		zd, err := zerodecimal.NewFromStringTrunc(s)
 		if err == nil {
-			fromUD := alpaca.NewFromUDecimal(ud)
-			if !fromUD.Equal(a) {
-				t.Errorf("NewFromUDecimal(%s): got %s expected %s", s, fromUD.String(), a.String())
-			}
-			// NewFromDecimal is an alias; verify it behaves identically.
-			fromD := alpaca.NewFromDecimal(ud)
-			if !fromD.Equal(a) {
-				t.Errorf("NewFromDecimal(%s): got %s expected %s", s, fromD.String(), a.String())
+			fromZD := alpaca.NewFromDecimal(zd)
+			if !fromZD.Equal(a) {
+				t.Errorf("NewFromDecimal(%s): got %s expected %s", s, fromZD.String(), a.String())
 			}
 		}
 	})
@@ -1274,20 +1517,17 @@ func FuzzStringFormats(f *testing.F) {
 		}
 
 		// StringFixed
-		if got, want := a.StringFixed(p), shopD.StringFixed(p); got != want {
-			t.Errorf("StringFixed(%s, %d): alpaca=%q shopspring=%q", s, p, got, want)
-		}
+		checkOpString(t, fmt.Sprintf("StringFixed(%s, %d)", s, p),
+			func() string { return a.StringFixed(p) }, shopD.StringFixed(p), shopD)
 
 		// StringFixedBank
-		if got, want := a.StringFixedBank(p), shopD.StringFixedBank(p); got != want {
-			t.Errorf("StringFixedBank(%s, %d): alpaca=%q shopspring=%q", s, p, got, want)
-		}
+		checkOpString(t, fmt.Sprintf("StringFixedBank(%s, %d)", s, p),
+			func() string { return a.StringFixedBank(p) }, shopD.StringFixedBank(p), shopD)
 
 		// StringScaled is deprecated; it truncates (not rounds) and trims,
 		// exactly like shopspring's rescale + String.
-		if got, want := a.StringScaled(-p), shopD.StringScaled(-p); got != want {
-			t.Errorf("StringScaled(%s, -%d): alpaca=%q shopspring=%q", s, p, got, want)
-		}
+		checkOpString(t, fmt.Sprintf("StringScaled(%s, -%d)", s, p),
+			func() string { return a.StringScaled(-p) }, shopD.StringScaled(-p), shopD)
 	})
 }
 
@@ -1329,6 +1569,22 @@ func FuzzSerialization(f *testing.F) {
 		aRawErr := json.Unmarshal([]byte(s), &aRaw)
 		var sRaw shopspring.Decimal
 		sRawErr := json.Unmarshal([]byte(s), &sRaw)
+		// 128-bit domain rules (iff): out-of-domain values must be rejected
+		// with the domain error; in-domain values must never raise it.
+		if sRawErr == nil {
+			if outOfDomain(sRaw) {
+				if aRawErr == nil {
+					t.Errorf("json.Unmarshal(%q) accepted out-of-domain value: alpaca=%s shopspring=%s",
+						s, aRaw.String(), sRaw.String())
+				} else if !isDomainError(aRawErr) {
+					t.Errorf("json.Unmarshal(%q): expected domain error for out-of-domain value %s, got: %v",
+						s, sRaw.String(), aRawErr)
+				}
+			} else if isDomainError(aRawErr) {
+				t.Errorf("json.Unmarshal(%q): spurious domain error for in-domain value %s: %v",
+					s, sRaw.String(), aRawErr)
+			}
+		}
 		if (aRawErr != nil) != (sRawErr != nil) {
 			if !(sRawErr == nil && !comparableValue(sRaw)) {
 				t.Errorf("json.Unmarshal(%q) error parity: alpaca=%v shopspring=%v", s, aRawErr, sRawErr)
@@ -1444,6 +1700,107 @@ func FuzzSerialization(f *testing.F) {
 		if !aScan.Equal(a) {
 			t.Errorf("Value/Scan round-trip(%s): before=%s after=%s", s, a.String(), aScan.String())
 		}
+	})
+}
+
+// FuzzUnmarshalBinary feeds raw bytes to UnmarshalBinary on both libraries.
+// The wire format is shopspring's (4 big-endian exponent bytes followed by a
+// gob-encoded big.Int), so error presence must agree, with two accepted
+// divergences:
+//
+//   - 128-bit domain: shopspring decodes coefficients of any magnitude;
+//     alpacadecimal must reject out-of-domain values with the domain error —
+//     and must neither raise it for in-domain values nor accept
+//     out-of-domain ones (the iff rule);
+//   - exponent DoS guard: alpacadecimal rejects wire exponents beyond ±10000
+//     because it materializes the coefficient eagerly, where shopspring
+//     stores the exponent lazily and accepts.
+//
+// Garbage input must never panic: the alpacadecimal call is unguarded, so
+// any panic crashes the target.
+func FuzzUnmarshalBinary(f *testing.F) {
+	for _, s := range []string{
+		"0", "1", "-1", "123.456", "-0.0000000000000000001",
+		"9223372.000000000001", // optimized boundary
+		"10000000000000000000",
+		"0.12345678901234567890123456789",         // >19 fractional digits
+		"340282366920938463463374607431768211455", // 2^128-1: in domain
+		"340282366920938463463374607431768211456", // 2^128: out of domain
+		"-340282366920938463463374607431768211456",
+		"340282366920938463463374607431768211456.5",
+		"1e100", "-1e100", "1e-100",
+	} {
+		b, err := shopspring.RequireFromString(s).MarshalBinary()
+		if err != nil {
+			f.Fatalf("seed %q: MarshalBinary: %v", s, err)
+		}
+		f.Add(b)
+	}
+	// garbage seeds
+	f.Add([]byte{})
+	f.Add([]byte{0x00})
+	f.Add([]byte{0x00, 0x00, 0x00, 0x00})
+	f.Add([]byte("garbage input"))
+	f.Add([]byte{0xff, 0xff, 0xff, 0xff, 0x02, 0x01})
+	f.Add([]byte{0x00, 0x00, 0x00, 0x01, 0x04, 0xff}) // unsupported gob version
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Bound the coefficient size: gigantic big.Ints only slow the run.
+		if len(data) > 200 {
+			return
+		}
+
+		var aD alpaca.Decimal
+		aErr := aD.UnmarshalBinary(data) // must never panic, even on garbage
+
+		var sD shopspring.Decimal
+		sErr := sD.UnmarshalBinary(data)
+
+		// Intentional divergence: wire exponents beyond the ±10000 DoS guard
+		// are rejected by alpacadecimal and lazily accepted by shopspring.
+		// Cross-checking would force shopspring to materialize 10^|exp|, so
+		// these inputs are skipped entirely (after the no-panic check above).
+		if len(data) >= 4 {
+			if exp := int32(binary.BigEndian.Uint32(data[:4])); exp > 10000 || exp < -10000 {
+				return
+			}
+		}
+
+		if sErr != nil {
+			// The wire format is shared, so bytes shopspring rejects must be
+			// rejected by alpacadecimal too.
+			if aErr == nil {
+				t.Errorf("UnmarshalBinary(%x): alpaca accepted bytes shopspring rejects (%v): got %s",
+					data, sErr, aD.String())
+			}
+			return
+		}
+
+		// 128-bit domain rules (iff).
+		if outOfDomain(sD) {
+			if aErr == nil {
+				t.Errorf("UnmarshalBinary(%x) accepted out-of-domain value: alpaca=%s shopspring=%s",
+					data, aD.String(), sD.String())
+			} else if !isDomainError(aErr) {
+				t.Errorf("UnmarshalBinary(%x): expected domain error for out-of-domain value %s, got: %v",
+					data, sD.String(), aErr)
+			}
+			return
+		}
+		if aErr != nil {
+			if isDomainError(aErr) {
+				t.Errorf("UnmarshalBinary(%x): spurious domain error for in-domain value %s: %v",
+					data, sD.String(), aErr)
+			} else {
+				t.Errorf("UnmarshalBinary(%x) error parity: alpaca=%v shopspring=nil (value %s)",
+					data, aErr, sD.String())
+			}
+			return
+		}
+
+		// Both decoded an in-domain value: alpaca truncates fractional digits
+		// beyond 19 and then to a 128-bit coefficient; compare accordingly.
+		compareAdjusted(t, fmt.Sprintf("UnmarshalBinary(%x)", data), aD, sD.Truncate(maxPrec))
 	})
 }
 
@@ -1676,6 +2033,16 @@ func FuzzScan(f *testing.F) {
 			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
 				return
 			}
+			// Out-of-domain floats (|v| >= 2^128): Scan must return the
+			// domain error (decode-path contract) while shopspring succeeds.
+			if math.Abs(v) >= math.Ldexp(1, 128) {
+				var aD alpaca.Decimal
+				err := aD.Scan(v)
+				if err == nil || !isDomainError(err) {
+					t.Errorf("Scan(float64 %v): expected domain error, got %v", v, err)
+				}
+				return
+			}
 			// Both libraries Scan floats via NewFromFloat (minimal
 			// representation); alpaca truncates past 19 fractional digits.
 			if fracDigitsOf(strconv.FormatFloat(v, 'f', -1, 64)) > maxPrec {
@@ -1685,6 +2052,16 @@ func FuzzScan(f *testing.F) {
 		case 3:
 			v, err := strconv.ParseFloat(s, 32)
 			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+				return
+			}
+			// see the case 2 comment: out-of-domain float32 Scan must
+			// return the domain error
+			if math.Abs(float64(float32(v))) >= math.Ldexp(1, 128) {
+				var aD alpaca.Decimal
+				err := aD.Scan(float32(v))
+				if err == nil || !isDomainError(err) {
+					t.Errorf("Scan(float32 %v): expected domain error, got %v", float32(v), err)
+				}
 				return
 			}
 			if fracDigitsOf(strconv.FormatFloat(float64(float32(v)), 'f', -1, 64)) > maxPrec {
@@ -1709,6 +2086,26 @@ func FuzzScan(f *testing.F) {
 		aErr := aD.Scan(src)
 		var sD shopspring.Decimal
 		sErr := sD.Scan(src)
+
+		// 128-bit domain rules (iff): out-of-domain values must be rejected
+		// with the domain error; in-domain values must never raise it.
+		if sErr == nil {
+			if outOfDomain(sD) {
+				if aErr == nil {
+					t.Errorf("Scan(%T from %q) accepted out-of-domain value: alpaca=%s shopspring=%s",
+						src, s, aD.String(), sD.String())
+				} else if !isDomainError(aErr) {
+					t.Errorf("Scan(%T from %q): expected domain error for out-of-domain value %s, got: %v",
+						src, s, sD.String(), aErr)
+				}
+				return
+			}
+			if isDomainError(aErr) {
+				t.Errorf("Scan(%T from %q): spurious domain error for in-domain value %s: %v",
+					src, s, sD.String(), aErr)
+				return
+			}
+		}
 
 		if (aErr != nil) != (sErr != nil) {
 			if sErr == nil && !comparableValue(sD) {
@@ -1753,34 +2150,37 @@ func TestRandomOperations(t *testing.T) {
 			continue
 		}
 
-		compare(t, fmt.Sprintf("[%d] Add(%s, %s)", i, aStr, bStr),
-			a.Add(b), shopA.Add(shopB))
-		compare(t, fmt.Sprintf("[%d] Sub(%s, %s)", i, aStr, bStr),
-			a.Sub(b), shopA.Sub(shopB))
-		compareTruncated(t, fmt.Sprintf("[%d] Mul(%s, %s)", i, aStr, bStr),
-			a.Mul(b), shopA.Mul(shopB), maxPrec)
+		checkOp(t, fmt.Sprintf("[%d] Add(%s, %s)", i, aStr, bStr),
+			func() alpaca.Decimal { return a.Add(b) }, shopA.Add(shopB))
+		checkOp(t, fmt.Sprintf("[%d] Sub(%s, %s)", i, aStr, bStr),
+			func() alpaca.Decimal { return a.Sub(b) }, shopA.Sub(shopB))
+		// Products of 15-integer-digit operands routinely exceed a 128-bit
+		// coefficient at 19 fractional digits; checkOpTruncated's domain
+		// adjustment models the extra fractional truncation.
+		checkOpTruncated(t, fmt.Sprintf("[%d] Mul(%s, %s)", i, aStr, bStr),
+			func() alpaca.Decimal { return a.Mul(b) }, shopA.Mul(shopB), maxPrec)
 
 		if !b.IsZero() {
-			compare(t, fmt.Sprintf("[%d] Mod(%s, %s)", i, aStr, bStr),
-				a.Mod(b), shopA.Mod(shopB))
+			checkOp(t, fmt.Sprintf("[%d] Mod(%s, %s)", i, aStr, bStr),
+				func() alpaca.Decimal { return a.Mod(b) }, shopA.Mod(shopB))
 		}
 
 		places := int32(rng.Intn(36) - 10) // [-10, 25]
 
-		compare(t, fmt.Sprintf("[%d] Round(%s, %d)", i, aStr, places),
-			a.Round(places), shopA.Round(places))
-		compare(t, fmt.Sprintf("[%d] RoundBank(%s, %d)", i, aStr, places),
-			a.RoundBank(places), shopA.RoundBank(places))
-		compare(t, fmt.Sprintf("[%d] Truncate(%s, %d)", i, aStr, places),
-			a.Truncate(places), shopA.Truncate(places))
-		compare(t, fmt.Sprintf("[%d] RoundCeil(%s, %d)", i, aStr, places),
-			a.RoundCeil(places), shopA.RoundCeil(places))
-		compare(t, fmt.Sprintf("[%d] RoundFloor(%s, %d)", i, aStr, places),
-			a.RoundFloor(places), shopA.RoundFloor(places))
-		compare(t, fmt.Sprintf("[%d] RoundUp(%s, %d)", i, aStr, places),
-			a.RoundUp(places), shopA.RoundUp(places))
-		compare(t, fmt.Sprintf("[%d] RoundDown(%s, %d)", i, aStr, places),
-			a.RoundDown(places), shopA.RoundDown(places))
+		checkOp(t, fmt.Sprintf("[%d] Round(%s, %d)", i, aStr, places),
+			func() alpaca.Decimal { return a.Round(places) }, shopA.Round(places))
+		checkOp(t, fmt.Sprintf("[%d] RoundBank(%s, %d)", i, aStr, places),
+			func() alpaca.Decimal { return a.RoundBank(places) }, shopA.RoundBank(places))
+		checkOp(t, fmt.Sprintf("[%d] Truncate(%s, %d)", i, aStr, places),
+			func() alpaca.Decimal { return a.Truncate(places) }, shopA.Truncate(places))
+		checkOp(t, fmt.Sprintf("[%d] RoundCeil(%s, %d)", i, aStr, places),
+			func() alpaca.Decimal { return a.RoundCeil(places) }, shopA.RoundCeil(places))
+		checkOp(t, fmt.Sprintf("[%d] RoundFloor(%s, %d)", i, aStr, places),
+			func() alpaca.Decimal { return a.RoundFloor(places) }, shopA.RoundFloor(places))
+		checkOp(t, fmt.Sprintf("[%d] RoundUp(%s, %d)", i, aStr, places),
+			func() alpaca.Decimal { return a.RoundUp(places) }, shopA.RoundUp(places))
+		checkOp(t, fmt.Sprintf("[%d] RoundDown(%s, %d)", i, aStr, places),
+			func() alpaca.Decimal { return a.RoundDown(places) }, shopA.RoundDown(places))
 
 		if got, want := a.Sign(), shopA.Sign(); got != want {
 			t.Errorf("[%d] Sign(%s): alpaca=%d shopspring=%d", i, aStr, got, want)

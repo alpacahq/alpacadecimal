@@ -81,19 +81,8 @@ func (d Decimal) MarshalBinary() (data []byte, err error) {
 	if d.fallback == nil {
 		return appendBinaryParts(make([]byte, 0, 14), -precision, d.fixed < 0, 0, uabs(d.fixed)), nil
 	}
-	neg, hi, lo, prec, ok := d.fallback.ToHiLo()
-	if ok {
-		return appendBinaryParts(make([]byte, 0, 22), -int32(prec), neg, hi, lo), nil
-	}
-	// >128-bit coefficient: delegate to big.Int's encoder.
-	coef, exp := d.toBigParts()
-	valueData, err := coef.GobEncode()
-	if err != nil {
-		return nil, err
-	}
-	expData := make([]byte, 4, len(valueData)+4)
-	binary.BigEndian.PutUint32(expData, uint32(exp))
-	return append(expData, valueData...), nil
+	neg, hi, lo, prec := d.fallback.ToHiLo()
+	return appendBinaryParts(make([]byte, 0, 22), -int32(prec), neg, hi, lo), nil
 }
 
 // appendBinaryParts writes the shopspring binary format: 4-byte big-endian
@@ -154,7 +143,11 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 			lo = lo<<8 | uint64(c)
 		}
 		if lo <= 1<<63-1 {
-			*d = newFromInt64Exp(signed64(lo, neg), int64(exp))
+			dec, err := newFromInt64ExpErr(signed64(lo, neg), int64(exp))
+			if err != nil {
+				return fmt.Errorf("error decoding binary %v: %s", data, err)
+			}
+			*d = dec
 			return nil
 		}
 	}
@@ -162,7 +155,11 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 	if neg {
 		bi.Neg(bi)
 	}
-	*d = decimalFromBigParts(bi, int64(exp))
+	dec, err := decimalFromBigPartsErr(bi, int64(exp))
+	if err != nil {
+		return fmt.Errorf("error decoding binary %v: %s", data, err)
+	}
+	*d = dec
 	return nil
 }
 
@@ -198,11 +195,19 @@ func (d *Decimal) Scan(value interface{}) error {
 		return d.scanString(v)
 	case float32:
 		// shopspring widens float32 to float64 when scanning
-		*d = NewFromFloat(float64(v))
+		dec, err := scanFloat(float64(v))
+		if err != nil {
+			return err
+		}
+		*d = dec
 		return nil
 	case float64:
 		// numeric in sqlite3 sends us float64
-		*d = NewFromFloat(v)
+		dec, err := scanFloat(v)
+		if err != nil {
+			return err
+		}
+		*d = dec
 		return nil
 	case int64:
 		// at least in sqlite3 when the value is 0 in db, the data is sent

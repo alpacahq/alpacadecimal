@@ -4,7 +4,7 @@ import (
 	"database/sql/driver"
 	"strings"
 
-	"github.com/quagmt/udecimal"
+	zerodecimal "github.com/AlexandrosKyriakakis/zerodecimal"
 )
 
 // optimized:
@@ -131,11 +131,11 @@ func formatFixedPlaces(fixed int64, places int32) string {
 	return string(s[start:end])
 }
 
-// formatFallback renders a fallback value identically to udecimal.String,
+// formatFallback renders a fallback value identically to zerodecimal.String,
 // with a faster path for coefficients that fit in 64 bits.
-func formatFallback(fb udecimal.Decimal) string {
-	neg, hi, lo, prec, ok := fb.ToHiLo()
-	if !ok || hi != 0 {
+func formatFallback(fb zerodecimal.Decimal) string {
+	neg, hi, lo, prec := fb.ToHiLo()
+	if hi != 0 {
 		return fb.String()
 	}
 	return formatU64(neg, lo, int(prec))

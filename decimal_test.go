@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/quagmt/udecimal"
+	zerodecimal "github.com/AlexandrosKyriakakis/zerodecimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -224,16 +224,16 @@ func TestDecimal(t *testing.T) {
 
 	t.Run("NewFromDecimal", func(t *testing.T) {
 		// first, with optimized decimal
-		x := alpacadecimal.NewFromDecimal(udecimal.MustParse("1.23"))
+		x := alpacadecimal.NewFromDecimal(zerodecimal.RequireFromString("1.23"))
 		y := alpacadecimal.New(123, -2)
 		shouldEqual(t, x, y)
 
 		// the prior means of conversion from decimal commonly used
-		y = alpacadecimal.RequireFromString(udecimal.MustParse("1.23").String())
+		y = alpacadecimal.RequireFromString(zerodecimal.RequireFromString("1.23").String())
 		shouldEqual(t, x, y)
 
 		// now, with out of optimization range decimal
-		x = alpacadecimal.NewFromDecimal(udecimal.MustParse("0.0000000000001"))
+		x = alpacadecimal.NewFromDecimal(zerodecimal.RequireFromString("0.0000000000001"))
 		y = alpacadecimal.New(1, -13)
 		shouldEqual(t, x, y)
 	})

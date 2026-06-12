@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"math/big"
 	"math/bits"
-	"strings"
 
-	"github.com/quagmt/udecimal"
+	zerodecimal "github.com/AlexandrosKyriakakis/zerodecimal"
 )
 
 // pow10Table[i] = 10^i as int64, i in [0, 18].
@@ -25,12 +24,12 @@ var pow10u = [20]uint64{
 	1e15, 1e16, 1e17, 1e18, 1e19,
 }
 
-// udecPow10[i] = 10^i as udecimal.Decimal, i in [0, 19].
-var udecPow10 = [20]udecimal.Decimal{}
+// zdPow10[i] = 10^i as zerodecimal.Decimal, i in [0, 19].
+var zdPow10 = [20]zerodecimal.Decimal{}
 
 func init() {
-	for i := range udecPow10 {
-		udecPow10[i] = udecimal.MustParse("1" + strings.Repeat("0", i))
+	for i := range zdPow10 {
+		zdPow10[i] = zerodecimal.MustNew(1, int32(i))
 	}
 }
 
@@ -121,53 +120,63 @@ func bigFromHiLo(neg bool, hi, lo uint64) *big.Int {
 	return bi
 }
 
-// udecFromBig constructs a udecimal.Decimal with value coef * 10^-prec where
-// coef is an arbitrary-magnitude big.Int. prec must be <= 19.
-func udecFromBig(coef *big.Int, prec uint8) udecimal.Decimal {
+// outOfDomainMsg is the panic message for values that cannot be represented
+// at all: zerodecimal's coefficient is a 128-bit integer, so |value| >= 2^128
+// (~3.4e38) is out of domain even at precision 0. Infallible API paths panic
+// with this message; parse/decode paths surface errOutOfDomain instead.
+const outOfDomainMsg = "alpacadecimal: value exceeds the 128-bit decimal domain (|value| >= 2^128)"
+
+var errOutOfDomain = fmt.Errorf("value exceeds the 128-bit decimal domain (|value| >= 2^128)")
+
+// zdFromBigOK constructs a zerodecimal.Decimal with value coef * 10^-prec
+// where coef is an arbitrary-magnitude big.Int and prec <= 19. When the
+// coefficient exceeds 128 bits, fractional digits are truncated toward zero
+// (degrading prec) until it fits — extending the package convention of
+// truncating fractional digits beyond 19. ok is false when even the integer
+// part does not fit a 128-bit coefficient.
+func zdFromBigOK(coef *big.Int, prec uint8) (zerodecimal.Decimal, bool) {
 	neg := coef.Sign() < 0
 	abs := coef
 	if neg {
 		abs = new(big.Int).Neg(coef)
 	}
-	if abs.BitLen() <= 128 {
-		var hi, lo uint64
-		words := abs.Bits()
-		if len(words) > 0 {
-			lo = uint64(words[0])
+	if abs.BitLen() > 128 {
+		if prec == 0 {
+			return zerodecimal.Decimal{}, false
 		}
-		if len(words) > 1 {
-			hi = uint64(words[1])
+		if abs == coef {
+			abs = new(big.Int).Set(coef) // do not mutate the caller's value
 		}
-		d, err := udecimal.NewFromHiLo(neg, hi, lo, prec)
-		if err == nil {
-			return d
+		ten := big.NewInt(10)
+		for abs.BitLen() > 128 && prec > 0 {
+			abs.Quo(abs, ten)
+			prec--
 		}
-		// fall through to the generic path on unexpected errors
+		if abs.BitLen() > 128 {
+			return zerodecimal.Decimal{}, false
+		}
 	}
-	// Arbitrary magnitude: build the integer coefficient in 19-digit chunks.
-	// udecimal transparently switches to big.Int coefficients on overflow.
-	s := abs.String()
-	var d udecimal.Decimal // zero
-	for len(s) > 0 {
-		n := len(s)
-		if n > 19 {
-			n = 19
-		}
-		chunk := s[:n]
-		s = s[n:]
-		var cv uint64
-		for i := 0; i < len(chunk); i++ {
-			cv = cv*10 + uint64(chunk[i]-'0')
-		}
-		cd, _ := udecimal.NewFromUint64(cv, 0)
-		d = d.Mul(udecPow10[len(chunk)]).Add(cd)
+	var hi, lo uint64
+	words := abs.Bits()
+	if len(words) > 0 {
+		lo = uint64(words[0])
 	}
-	if prec > 0 {
-		// Exact: the result has exactly prec fractional digits.
-		d, _ = d.Div(udecPow10[prec])
+	if len(words) > 1 {
+		hi = uint64(words[1])
 	}
-	if neg {
-		d = d.Neg()
+	d, err := zerodecimal.NewFromHiLo(neg, hi, lo, prec)
+	if err != nil {
+		return zerodecimal.Decimal{}, false
+	}
+	return d, true
+}
+
+// zdFromBig is zdFromBigOK for infallible call paths: it panics when the
+// value is out of the 128-bit domain.
+func zdFromBig(coef *big.Int, prec uint8) zerodecimal.Decimal {
+	d, ok := zdFromBigOK(coef, prec)
+	if !ok {
+		panic(outOfDomainMsg)
 	}
 	return d
 }
@@ -177,62 +186,61 @@ func (d Decimal) toBigParts() (coef *big.Int, exp int32) {
 	if d.fallback == nil {
 		return big.NewInt(d.fixed), -precision
 	}
-	neg, hi, lo, prec, ok := d.fallback.ToHiLo()
-	if ok {
-		return bigFromHiLo(neg, hi, lo), -int32(prec)
-	}
-	// Coefficient exceeds 128 bits: recover exact digits from the string form.
-	s := d.fallback.String()
-	negs := false
-	if len(s) > 0 && s[0] == '-' {
-		negs = true
-		s = s[1:]
-	}
-	frac := 0
-	if dot := strings.IndexByte(s, '.'); dot >= 0 {
-		frac = len(s) - dot - 1
-		s = s[:dot] + s[dot+1:]
-	}
-	bi, _ := new(big.Int).SetString(s, 10)
-	if bi == nil {
-		bi = new(big.Int)
-	}
-	if negs {
-		bi.Neg(bi)
-	}
-	return bi, -int32(frac)
+	neg, hi, lo, prec := d.fallback.ToHiLo()
+	return bigFromHiLo(neg, hi, lo), -int32(prec)
 }
 
 // decimalFromBigParts converts coef * 10^exp into a Decimal, truncating
-// fractional digits beyond udecimal's 19-digit limit (consistent with the
-// package-wide truncation convention for out-of-range precision).
+// fractional digits beyond the fallback's 19-digit limit (consistent with the
+// package-wide truncation convention for out-of-range precision). It panics
+// when the value exceeds the 128-bit coefficient domain; parse and decode
+// paths use decimalFromBigPartsErr instead.
 func decimalFromBigParts(coef *big.Int, exp int64) Decimal {
+	d, err := decimalFromBigPartsErr(coef, exp)
+	if err != nil {
+		panic(outOfDomainMsg)
+	}
+	return d
+}
+
+// decimalFromBigPartsErr is decimalFromBigParts returning errOutOfDomain
+// instead of panicking when the value cannot be represented.
+func decimalFromBigPartsErr(coef *big.Int, exp int64) (Decimal, error) {
 	if coef.Sign() == 0 {
-		return Zero
+		return Zero, nil
 	}
 	// Fixed fast path for small coefficients.
 	if coef.IsInt64() {
-		return newFromInt64Exp(coef.Int64(), exp)
+		return newFromInt64ExpErr(coef.Int64(), exp)
 	}
 	if exp > 0 {
 		shifted := new(big.Int).Mul(coef, bigPow10(exp))
-		return NewFromUDecimal(udecFromBig(shifted, 0))
+		if zd, ok := zdFromBigOK(shifted, 0); ok {
+			return NewFromDecimal(zd), nil
+		}
+		return Decimal{}, errOutOfDomain
 	}
 	if exp >= -19 {
-		return NewFromUDecimal(udecFromBig(coef, uint8(-exp)))
+		if zd, ok := zdFromBigOK(coef, uint8(-exp)); ok {
+			return NewFromDecimal(zd), nil
+		}
+		return Decimal{}, errOutOfDomain
 	}
 	// Truncate digits beyond 19 fractional places.
 	shift := -exp - 19
 	// 10^shift certainly exceeds |coef| when shift > digits(coef); bail out
 	// before materializing a potentially enormous power of ten.
 	if shift > int64(coef.BitLen()/3)+2 {
-		return Zero
+		return Zero, nil
 	}
 	truncated := new(big.Int).Quo(coef, bigPow10(shift))
 	if truncated.Sign() == 0 {
-		return Zero
+		return Zero, nil
 	}
-	return NewFromUDecimal(udecFromBig(truncated, 19))
+	if zd, ok := zdFromBigOK(truncated, 19); ok {
+		return NewFromDecimal(zd), nil
+	}
+	return Decimal{}, errOutOfDomain
 }
 
 // maxMaterializedExp bounds eager materialization of 10^n coefficients
@@ -254,38 +262,51 @@ func bigPow10(n int64) *big.Int {
 }
 
 // newFromInt64Exp converts v * 10^exp into a Decimal for any exponent,
-// truncating digits beyond 19 fractional places. It panics only when exp
-// exceeds maxMaterializedExp.
+// truncating digits beyond 19 fractional places. It panics when exp exceeds
+// maxMaterializedExp or the value exceeds the 128-bit coefficient domain.
 func newFromInt64Exp(v int64, exp int64) Decimal {
+	d, err := newFromInt64ExpErr(v, exp)
+	if err != nil {
+		panic(outOfDomainMsg)
+	}
+	return d
+}
+
+// newFromInt64ExpErr is newFromInt64Exp returning errOutOfDomain instead of
+// panicking when the value cannot be represented.
+func newFromInt64ExpErr(v int64, exp int64) (Decimal, error) {
 	if v == 0 {
-		return Zero
+		return Zero, nil
 	}
 	if fixed, ok := tryFixedInt64Exp(v, exp); ok {
-		return Decimal{fixed: fixed}
+		return Decimal{fixed: fixed}, nil
 	}
 	if exp > 0 {
 		if exp <= 18 {
-			// Exact: udecimal switches to big.Int coefficients on overflow.
-			return newFromFallback(udecimal.MustFromInt64(v, 0).Mul(udecPow10[exp]))
+			// Exact: |v| * 10^18 < 2^64 * 10^18 < 2^128 always fits.
+			return newFromFallback(zerodecimal.MustNew(v, int32(exp))), nil
 		}
 		shifted := new(big.Int).Mul(big.NewInt(v), bigPow10(exp))
-		return newFromFallback(udecFromBig(shifted, 0))
+		if zd, ok := zdFromBigOK(shifted, 0); ok {
+			return newFromFallback(zd), nil
+		}
+		return Decimal{}, errOutOfDomain
 	}
 	if exp >= -19 {
-		fb, _ := udecimal.NewFromInt64(v, uint8(-exp))
-		return newFromFallback(fb)
+		fb, _ := zerodecimal.New(v, int32(exp))
+		return newFromFallback(fb), nil
 	}
 	// exp < -19: truncate digits beyond 19 fractional places.
 	shift := -exp - 19
 	if shift > 18 {
-		return Zero
+		return Zero, nil
 	}
 	v /= pow10Table[shift]
 	if v == 0 {
-		return Zero
+		return Zero, nil
 	}
-	fb, _ := udecimal.NewFromInt64(v, 19)
-	return newFromFallback(fb)
+	fb, _ := zerodecimal.New(v, -19)
+	return newFromFallback(fb), nil
 }
 
 // tryFixedInt64Exp reports whether v * 10^exp is representable in the fixed

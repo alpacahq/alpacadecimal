@@ -85,11 +85,12 @@ func TestParityNewExponentRange(t *testing.T) {
 		require.NotPanics(t, func() {
 			require.Equal(t, "50000000000000000000", alpacadecimal.New(5, 19).String())
 		})
-		require.NotPanics(t, func() {
-			s := alpacadecimal.New(1, 300).String()
-			require.Len(t, s, 301) // "1" followed by 300 zeros
-			require.Equal(t, "1"+strings.Repeat("0", 300), s)
-		})
+		// DOMAIN DIVERGENCE (zerodecimal fallback): 10^300 exceeds the 128-bit
+		// coefficient domain, so New panics (the udecimal fallback returned
+		// "1" followed by 300 zeros, like shopspring).
+		require.PanicsWithValue(t,
+			"alpacadecimal: value exceeds the 128-bit decimal domain (|value| >= 2^128)",
+			func() { alpacadecimal.New(1, 300) })
 		require.Equal(t, "0", alpacadecimal.New(0, 19).String())
 	})
 
@@ -110,30 +111,26 @@ func TestParityNewExponentRange(t *testing.T) {
 func TestParityNewFromBigInt(t *testing.T) {
 	coef := new(big.Int).Exp(big.NewInt(10), big.NewInt(250), nil) // 10^250
 
+	// DOMAIN DIVERGENCE (zerodecimal fallback): 10^250-scale values exceed the
+	// 128-bit coefficient domain, so NewFromBigInt panics (the udecimal
+	// fallback represented them exactly via big.Int coefficients).
 	t.Run("10^250 exp 0", func(t *testing.T) {
-		d := alpacadecimal.NewFromBigInt(coef, 0)
-		require.Equal(t, coef.String(), d.String())
-		require.Len(t, d.String(), 251)
+		require.PanicsWithValue(t,
+			"alpacadecimal: value exceeds the 128-bit decimal domain (|value| >= 2^128)",
+			func() { alpacadecimal.NewFromBigInt(coef, 0) })
 	})
 
 	t.Run("negative 10^250 exp 199", func(t *testing.T) {
-		d := alpacadecimal.NewFromBigInt(new(big.Int).Neg(coef), 199)
-		expected := new(big.Int).Mul(
-			new(big.Int).Neg(coef),
-			new(big.Int).Exp(big.NewInt(10), big.NewInt(199), nil),
-		)
-		require.Equal(t, expected.String(), d.String())
-		require.Len(t, d.String(), 451) // sign + 450 digits
+		require.PanicsWithValue(t,
+			"alpacadecimal: value exceeds the 128-bit decimal domain (|value| >= 2^128)",
+			func() { alpacadecimal.NewFromBigInt(new(big.Int).Neg(coef), 199) })
 	})
 
-	t.Run("10^250 exp 300", func(t *testing.T) {
-		d := alpacadecimal.NewFromBigInt(coef, 300)
-		expected := new(big.Int).Mul(
-			coef,
-			new(big.Int).Exp(big.NewInt(10), big.NewInt(300), nil),
-		)
-		require.Equal(t, expected.String(), d.String())
-		require.Len(t, d.String(), 551)
+	t.Run("largest representable magnitude", func(t *testing.T) {
+		// 2^128 - 1 is the largest integer coefficient zerodecimal can hold
+		max128 := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
+		d := alpacadecimal.NewFromBigInt(max128, 0)
+		require.Equal(t, max128.String(), d.String())
 	})
 
 	t.Run("small stays optimized", func(t *testing.T) {
@@ -144,13 +141,17 @@ func TestParityNewFromBigInt(t *testing.T) {
 }
 
 func TestParityNewFromFloat(t *testing.T) {
-	t.Run("huge floats no panic", func(t *testing.T) {
+	t.Run("huge floats", func(t *testing.T) {
+		// DOMAIN DIVERGENCE (zerodecimal fallback): floats beyond ~3.4e38
+		// exceed the 128-bit coefficient domain, so NewFromFloat panics (the
+		// udecimal fallback converted them exactly). In-domain floats still
+		// convert exactly.
 		for _, f := range []float64{1e300, math.MaxFloat64} {
-			require.NotPanics(t, func() {
-				d := alpacadecimal.NewFromFloat(f)
-				require.Equal(t, strconv.FormatFloat(f, 'f', -1, 64), d.String())
-			})
+			require.Panics(t, func() { alpacadecimal.NewFromFloat(f) })
 		}
+		f := 1e38
+		d := alpacadecimal.NewFromFloat(f)
+		require.Equal(t, strconv.FormatFloat(f, 'f', -1, 64), d.String())
 	})
 
 	t.Run("NaN and Inf panic", func(t *testing.T) {
@@ -263,13 +264,19 @@ func TestParityStrictParsing(t *testing.T) {
 	})
 
 	t.Run("250-digit integer", func(t *testing.T) {
+		// DOMAIN DIVERGENCE (zerodecimal fallback): a 250-digit integer
+		// exceeds the 128-bit coefficient domain, so parsing errors (the
+		// udecimal fallback parsed it exactly). A 39-digit integer at the
+		// domain edge still parses exactly.
 		digits := strings.Repeat("1234567890", 25)
-		expected, ok := new(big.Int).SetString(digits, 10)
-		require.True(t, ok)
+		_, err := alpacadecimal.NewFromString(digits)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "exceeds the 128-bit decimal domain")
 
-		d, err := alpacadecimal.NewFromString(digits)
+		edge := "212345678901234567890123456789012345678" // 39 digits < 2^128
+		d, err := alpacadecimal.NewFromString(edge)
 		require.NoError(t, err)
-		require.Equal(t, expected.String(), d.String())
+		require.Equal(t, edge, d.String())
 	})
 }
 
@@ -648,7 +655,16 @@ func TestParityFloat64Exactness(t *testing.T) {
 
 func TestParityIntPart(t *testing.T) {
 	t.Run("huge fallback no panic", func(t *testing.T) {
-		huge := alpacadecimal.NewFromBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(250), nil), 0)
+		// DOMAIN DIVERGENCE (zerodecimal fallback): 10^250 exceeds the 128-bit
+		// coefficient domain, so constructing it panics (the udecimal fallback
+		// stored it exactly and IntPart returned truncated low bits). The
+		// largest representable scale still works without panicking.
+		require.PanicsWithValue(t,
+			"alpacadecimal: value exceeds the 128-bit decimal domain (|value| >= 2^128)",
+			func() {
+				alpacadecimal.NewFromBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(250), nil), 0)
+			})
+		huge := alpacadecimal.RequireFromString("99999999999999999999999999999999999999") // 38 nines, in domain
 		require.NotPanics(t, func() { huge.IntPart() })
 	})
 

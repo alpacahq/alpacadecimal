@@ -3,14 +3,19 @@
 //
 // Values whose magnitude is at most 9,223,372 with at most 12 fractional
 // digits are stored in a single int64 ("fixed" representation, the optimized
-// 99% case). Everything else falls back to github.com/quagmt/udecimal, which
-// supports up to 19 fractional digits with a 128-bit (or larger) coefficient.
+// 99% case). Everything else falls back to
+// github.com/AlexandrosKyriakakis/zerodecimal, which supports up to 19
+// fractional digits with a 128-bit coefficient.
 //
 // Compatibility notes vs shopspring/decimal:
 //   - Exponent, Coefficient, CoefficientInt64 and NumDigits return different
 //     (but valid) representations of equal values.
 //   - Fractional digits beyond 19 are truncated (or rejected after
 //     SetDefaultParseModeError); shopspring keeps arbitrary precision.
+//   - The coefficient is bounded to 128 bits: when an exact result would
+//     exceed it, fractional digits are truncated until it fits; values whose
+//     integer part alone exceeds 2^128 (~3.4e38) are out of domain — parse
+//     and decode paths return an error, infallible API paths panic.
 package alpacadecimal
 
 import (
@@ -23,7 +28,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/quagmt/udecimal"
+	zerodecimal "github.com/AlexandrosKyriakakis/zerodecimal"
 )
 
 // currently support 12 precision, this is tunnable,
@@ -62,9 +67,6 @@ var (
 )
 
 func init() {
-	// configure udecimal with our desired defaults
-	udecimal.SetDefaultParseMode(udecimal.ParseModeTrunc)
-
 	// init cache
 	for i := 0; i < cacheSize; i++ {
 		str := strconv.FormatFloat(float64(i-cacheOffset)/100, 'f', -1, 64)
@@ -81,7 +83,6 @@ func init() {
 // This should be called once at startup before any parsing occurs.
 func SetDefaultParseModeError() {
 	parseModeError = true
-	udecimal.SetDefaultParseMode(udecimal.ParseModeError)
 }
 
 // SetDefaultParseModeTrunc configures parsing to silently truncate extra
@@ -89,14 +90,17 @@ func SetDefaultParseModeError() {
 // This should be called once at startup before any parsing occurs.
 func SetDefaultParseModeTrunc() {
 	parseModeError = false
-	udecimal.SetDefaultParseMode(udecimal.ParseModeTrunc)
 }
 
 // SetDefaultPrecision sets the fallback engine's default precision (maximum
 // fractional digits). The precision must be between 1 and 19. This should be
 // called once at startup.
+//
+// NOTE: zerodecimal's precision is a compile-time constant (DefaultPrec,
+// adjustable via the zerodecimal_prec9/zerodecimal_prec12 build tags), so
+// this function is a no-op retained for API compatibility.
 func SetDefaultPrecision(prec uint8) {
-	udecimal.SetDefaultPrecision(prec)
+	_ = prec
 }
 
 // Variables (matching shopspring/decimal)
@@ -129,13 +133,13 @@ type Decimal struct {
 
 	// fallback holds out-of-fixed-range values. nil means the fixed
 	// representation is authoritative. The pointee is never mutated.
-	fallback *udecimal.Decimal
+	fallback *zerodecimal.Decimal
 }
 
 // APIs are marked as either "optimized" or "fallbacked"
 // where "optimized" means that it's specially optimized
 // where "fallback" means that it's not optimized and falls back to
-// udecimal.Decimal / big.Int arithmetic.
+// zerodecimal.Decimal / big.Int arithmetic.
 
 // optimized:
 // Avg returns the average value of the provided first and rest Decimals
@@ -238,21 +242,49 @@ func NewFromFloat(f float64) Decimal {
 }
 
 func newFromFloatSlow(f float64) Decimal {
+	d, err := newFromFloatSlowErr(f)
+	if err != nil {
+		panic(fmt.Sprintf("alpacadecimal.NewFromFloat: %v", err))
+	}
+	return d
+}
+
+// newFromFloatSlowErr is newFromFloatSlow returning out-of-domain values as
+// an error; NaN and infinities still panic (shopspring parity).
+func newFromFloatSlowErr(f float64) (Decimal, error) {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		panic(fmt.Sprintf("Cannot create a Decimal from %v", f))
 	}
 	// Convert float to string to avoid precision issues.
 	// If the minimal representation exceeds 19 fractional digits
-	// (udecimal's max precision), re-format with rounding to 19 places.
+	// (the fallback's max precision), re-format with rounding to 19 places.
 	str := strconv.FormatFloat(f, 'f', -1, 64)
 	if dotIdx := strings.IndexByte(str, '.'); dotIdx >= 0 && len(str)-dotIdx-1 > 19 {
 		str = strconv.FormatFloat(f, 'f', 19, 64)
 	}
-	d, err := NewFromString(str)
-	if err != nil {
-		panic(fmt.Sprintf("alpacadecimal.NewFromFloat: %v", err))
+	return NewFromString(str)
+}
+
+// scanFloat converts a float received through database/sql Scan. Unlike
+// NewFromFloat it returns out-of-domain magnitudes (|f| >= 2^128) as an
+// error, since Scan is a decode path; NaN/Inf still panic like shopspring.
+func scanFloat(f float64) (Decimal, error) {
+	af := math.Abs(f)
+	if af < 8192 {
+		// same fast path as NewFromFloat
+		n := math.Floor(af * 1e12)
+		if n/1e12 != af {
+			n++
+		}
+		if n/1e12 == af {
+			fixed := int64(n)
+			if math.Signbit(f) {
+				fixed = -fixed
+			}
+			return Decimal{fixed: fixed}, nil
+		}
 	}
-	return d
+	return newFromFloatSlowErr(f)
 }
 
 // fallback:
@@ -407,8 +439,7 @@ func NewFromInt(x int64) Decimal {
 	if x >= minInt && x <= maxInt {
 		return Decimal{fixed: x * scale}
 	}
-	fb, _ := udecimal.NewFromInt64(x, 0)
-	return newFromFallback(fb)
+	return newFromFallback(zerodecimal.NewFromInt(x))
 }
 
 // optimized:
@@ -423,8 +454,7 @@ func NewFromUint64(value uint64) Decimal {
 	if value <= uint64(maxInt) {
 		return Decimal{fixed: int64(value) * scale}
 	}
-	fb, _ := udecimal.NewFromUint64(value, 0)
-	return newFromFallback(fb)
+	return newFromFallback(zerodecimal.NewFromUint64(value))
 }
 
 // optimized:
@@ -469,7 +499,7 @@ func (d Decimal) absSlow() Decimal {
 func (d Decimal) Add(d2 Decimal) Decimal {
 	// if result of add does not overflow,
 	// we can keep result in fixed form as well.
-	// otherwise, we need to fall back to udecimal.Decimal
+	// otherwise, we need to fall back to zerodecimal.Decimal
 	if d.fallback == nil && d2.fallback == nil {
 		// check overflow
 		// based on https://stackoverflow.com/a/33643773
@@ -483,10 +513,37 @@ func (d Decimal) Add(d2 Decimal) Decimal {
 			}
 		}
 		// overflow: result is out of fixed range for sure
-		return newFromFallback(d.asFallback().Add(d2.asFallback()))
+		if r, err := d.asFallback().Add(d2.asFallback()); err == nil {
+			return newFromFallback(r)
+		}
+		return addSubBig(d, d2, false)
 	}
 	// mixed operands: the result may fit the fixed range again
-	return NewFromUDecimal(d.asFallback().Add(d2.asFallback()))
+	if r, err := d.asFallback().Add(d2.asFallback()); err == nil {
+		return NewFromDecimal(r)
+	}
+	return addSubBig(d, d2, false)
+}
+
+// addSubBig computes d ± d2 exactly on big.Int parts; the conversion back
+// truncates fractional digits past 19 and degrades precision for results
+// beyond the 128-bit coefficient domain.
+func addSubBig(d, d2 Decimal, sub bool) Decimal {
+	c1, e1 := d.toBigParts()
+	c2, e2 := d2.toBigParts()
+	if e1 > e2 {
+		c1 = new(big.Int).Mul(c1, bigPow10(int64(e1)-int64(e2)))
+		e1 = e2
+	} else if e2 > e1 {
+		c2 = new(big.Int).Mul(c2, bigPow10(int64(e2)-int64(e1)))
+	}
+	r := new(big.Int)
+	if sub {
+		r.Sub(c1, c2)
+	} else {
+		r.Add(c1, c2)
+	}
+	return decimalFromBigParts(r, int64(e1))
 }
 
 // optimized:
@@ -502,9 +559,15 @@ func (d Decimal) Sub(d2 Decimal) Decimal {
 				return Decimal{fixed: d.fixed - d2.fixed}
 			}
 		}
-		return newFromFallback(d.asFallback().Sub(d2.asFallback()))
+		if r, err := d.asFallback().Sub(d2.asFallback()); err == nil {
+			return newFromFallback(r)
+		}
+		return addSubBig(d, d2, true)
 	}
-	return NewFromUDecimal(d.asFallback().Sub(d2.asFallback()))
+	if r, err := d.asFallback().Sub(d2.asFallback()); err == nil {
+		return NewFromDecimal(r)
+	}
+	return addSubBig(d, d2, true)
 }
 
 // optimized:
@@ -515,7 +578,13 @@ func (d Decimal) Mul(d2 Decimal) Decimal {
 			return Decimal{fixed: fixed}
 		}
 	}
-	return NewFromUDecimal(d.asFallback().Mul(d2.asFallback()))
+	if r, err := d.asFallback().Mul(d2.asFallback()); err == nil {
+		return NewFromDecimal(r)
+	}
+	// exact product on big.Int parts; fractional digits past 19 truncate
+	c1, e1 := d.toBigParts()
+	c2, e2 := d2.toBigParts()
+	return decimalFromBigParts(new(big.Int).Mul(c1, c2), int64(e1)+int64(e2))
 }
 
 // optimized:
@@ -549,8 +618,8 @@ func (d Decimal) Div(d2 Decimal) Decimal {
 		}
 		if dp >= 0 && dp <= 19 {
 			if coef, neg, ok := divRoundBits(d.fixed, d2.fixed, dp); ok {
-				if u, err := udecimal.NewFromHiLo(neg, 0, coef, uint8(dp)); err == nil {
-					return NewFromUDecimal(u)
+				if u, err := zerodecimal.NewFromHiLo(neg, 0, coef, uint8(dp)); err == nil {
+					return NewFromDecimal(u)
 				}
 			}
 		}
@@ -573,21 +642,23 @@ func (d Decimal) DivRound(d2 Decimal, precision int32) Decimal {
 		}
 		if precision >= 0 && precision <= 19 {
 			if coef, neg, ok := divRoundBits(d.fixed, d2.fixed, int(precision)); ok {
-				if u, err := udecimal.NewFromHiLo(neg, 0, coef, uint8(precision)); err == nil {
-					return NewFromUDecimal(u)
+				if u, err := zerodecimal.NewFromHiLo(neg, 0, coef, uint8(precision)); err == nil {
+					return NewFromDecimal(u)
 				}
 			}
 		}
 	} else if precision >= 0 && precision <= 18 {
-		// udecimal.Div truncates the quotient at 19 digits, so rounding half
-		// away from zero at <= 18 digits sees the exact deciding digits.
+		// zerodecimal.Div truncates the quotient at adaptive precision; as long
+		// as the result keeps more than `precision` fractional digits, rounding
+		// half away from zero sees the exact deciding digits. Degraded-precision
+		// quotients (huge magnitudes) fall through to the exact big.Int path.
 		fb2 := d2.asFallback()
 		if fb2.IsZero() {
 			panic("decimal division by 0")
 		}
 		q, err := d.asFallback().Div(fb2)
-		if err == nil {
-			return NewFromUDecimal(q.RoundHAZ(uint8(precision)))
+		if err == nil && int32(q.Prec()) > precision {
+			return NewFromDecimal(q.Round(uint8(precision)))
 		}
 	}
 	return divRoundBig(d, d2, precision)
@@ -605,14 +676,15 @@ func (d Decimal) Mod(d2 Decimal) Decimal {
 		return Decimal{fixed: d.fixed % d2.fixed}
 	}
 	// The remainder needs at most max(prec1, prec2) <= 19 fractional digits,
-	// so udecimal computes it exactly.
+	// so zerodecimal computes it exactly (overflow of the intermediate
+	// quotient falls through to the exact big.Int path).
 	fb2 := d2.asFallback()
 	if fb2.IsZero() {
 		panic("decimal division by 0")
 	}
 	r, err := d.asFallback().Mod(fb2)
 	if err == nil {
-		return NewFromUDecimal(r)
+		return NewFromDecimal(r)
 	}
 	_, rr := quoRemBig(d, d2, 0)
 	return rr
@@ -648,8 +720,8 @@ func (d Decimal) QuoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
 	return quoRemBig(d, d2, precision)
 }
 
-// quoRemFallback computes QuoRem through udecimal when every intermediate is
-// exactly representable: max(prec1, prec2) + precision <= 19.
+// quoRemFallback computes QuoRem through zerodecimal when every intermediate
+// is exactly representable: max(prec1, prec2) + precision <= 19.
 func quoRemFallback(d, d2 Decimal, precision int32) (Decimal, Decimal, bool) {
 	if precision < 0 || precision > 18 {
 		return Decimal{}, Decimal{}, false
@@ -659,27 +731,34 @@ func quoRemFallback(d, d2 Decimal, precision int32) (Decimal, Decimal, bool) {
 	if fb2.IsZero() {
 		panic("decimal division by 0")
 	}
-	maxPrec := int32(fb1.PrecUint())
-	if p2 := int32(fb2.PrecUint()); p2 > maxPrec {
+	maxPrec := int32(fb1.Prec())
+	if p2 := int32(fb2.Prec()); p2 > maxPrec {
 		maxPrec = p2
 	}
 	if maxPrec+precision > 19 {
 		return Decimal{}, Decimal{}, false
 	}
-	// scaled = d * 10^precision (exact); intQ integer, intR exact remainder
-	scaled := fb1.Mul(udecPow10[precision])
+	// scaled = d * 10^precision (exact unless the coefficient overflows)
+	scaled, err := fb1.Mul(zdPow10[precision])
+	if err != nil {
+		return Decimal{}, Decimal{}, false
+	}
+	// intQ integer (prec 0), intR exact remainder at prec max(prec1, prec2)
 	intQ, intR, err := scaled.QuoRem(fb2)
 	if err != nil {
 		return Decimal{}, Decimal{}, false
 	}
-	// q = intQ / 10^precision: exact, gains precision fractional digits.
-	// r = intR / 10^precision: exact since intR.prec + precision <= 19.
-	q, err1 := intQ.Div(udecPow10[precision])
-	r, err2 := intR.Div(udecPow10[precision])
+	// q = intQ / 10^precision and r = intR / 10^precision: exact, performed by
+	// re-tagging the raw coefficients with `precision` extra fractional digits
+	// (intR.prec + precision <= 19 by the guard above).
+	qn, qhi, qlo, _ := intQ.ToHiLo()
+	q, err1 := zerodecimal.NewFromHiLo(qn, qhi, qlo, uint8(precision))
+	rn, rhi, rlo, rp := intR.ToHiLo()
+	r, err2 := zerodecimal.NewFromHiLo(rn, rhi, rlo, rp+uint8(precision))
 	if err1 != nil || err2 != nil {
 		return Decimal{}, Decimal{}, false
 	}
-	return NewFromUDecimal(q), NewFromUDecimal(r), true
+	return NewFromDecimal(q), NewFromDecimal(r), true
 }
 
 // optimized:
@@ -837,7 +916,7 @@ func (d Decimal) IsNegative() bool {
 }
 
 func (d Decimal) negativeSlow() bool {
-	return d.fallback.IsNeg()
+	return d.fallback.IsNegative()
 }
 
 // optimized:
@@ -854,7 +933,7 @@ func (d Decimal) IsPositive() bool {
 }
 
 func (d Decimal) positiveSlow() bool {
-	return d.fallback.IsPos()
+	return d.fallback.IsPositive()
 }
 
 // optimized:
@@ -872,13 +951,13 @@ func (d Decimal) IsZero() bool {
 
 // internal implementation
 
-func newFromFallback(u udecimal.Decimal) Decimal {
+func newFromFallback(u zerodecimal.Decimal) Decimal {
 	return Decimal{fallback: &u}
 }
 
-func (d Decimal) asFallback() udecimal.Decimal {
+func (d Decimal) asFallback() zerodecimal.Decimal {
 	if d.fallback == nil {
-		r, _ := udecimal.NewFromInt64(d.fixed, precision)
+		r, _ := zerodecimal.New(d.fixed, -precision)
 		return r
 	}
 	return *d.fallback
@@ -999,8 +1078,8 @@ func quoRemFixed(x, y int64, prec int) (Decimal, Decimal, bool) {
 		}
 		rd = Decimal{fixed: rf}
 	} else {
-		// needs 12+prec (<= 19) fractional digits: exact in udecimal
-		fb, err := udecimal.NewFromInt64(signed64(ri, x < 0), uint8(precision+prec))
+		// needs 12+prec (<= 19) fractional digits: exact in zerodecimal
+		fb, err := zerodecimal.New(signed64(ri, x < 0), -int32(precision+prec))
 		if err != nil {
 			return Decimal{}, Decimal{}, false
 		}

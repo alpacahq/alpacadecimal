@@ -184,7 +184,11 @@ func parseMantissa(original, v string, exp int64) (Decimal, error) {
 		if neg {
 			m = -m
 		}
-		return newFromInt64Exp(m, exp), nil
+		d, err := newFromInt64ExpErr(m, exp)
+		if err != nil {
+			return Zero, fmt.Errorf("can't convert %s to decimal: %s", original, err)
+		}
+		return d, nil
 	}
 
 	// Big mantissa: rebuild the significant digits without the dot.
@@ -206,7 +210,11 @@ func parseMantissa(original, v string, exp int64) (Decimal, error) {
 	if neg {
 		bi.Neg(bi)
 	}
-	return decimalFromBigParts(bi, exp), nil
+	d, err := decimalFromBigPartsErr(bi, exp)
+	if err != nil {
+		return Zero, fmt.Errorf("can't convert %s to decimal: %s", original, err)
+	}
+	return d, nil
 }
 
 // truncatedInt64LosesDigits reports whether representing m * 10^exp (exp <
