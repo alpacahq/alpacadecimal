@@ -1,38 +1,47 @@
+// Package alpacadecimal provides a high-performance, drop-in replacement for
+// github.com/shopspring/decimal.
+//
+// Values whose magnitude is at most 9,223,372 with at most 12 fractional
+// digits are stored in a single int64 ("fixed" representation, the optimized
+// 99% case). Everything else falls back to github.com/quagmt/udecimal, which
+// supports up to 19 fractional digits with a 128-bit (or larger) coefficient.
+//
+// Compatibility notes vs shopspring/decimal:
+//   - Exponent, Coefficient, CoefficientInt64 and NumDigits return different
+//     (but valid) representations of equal values.
+//   - Fractional digits beyond 19 are truncated (or rejected after
+//     SetDefaultParseModeError); shopspring keeps arbitrary precision.
 package alpacadecimal
 
 import (
 	"database/sql/driver"
+	"fmt"
 	"math"
 	"math/big"
+	"math/bits"
 	"regexp"
 	"strconv"
+	"strings"
 
-	"github.com/shopspring/decimal"
+	"github.com/quagmt/udecimal"
 )
 
 // currently support 12 precision, this is tunnable,
 // more precision => smaller maxInt
 // less precision => bigger maxInt
 const (
-	precision                        = 12
-	scale                            = 1e12
-	maxInt                     int64 = int64(math.MaxInt64) / scale
-	minInt                     int64 = int64(math.MinInt64) / scale
-	maxIntInFixed              int64 = maxInt * scale
-	minIntInFixed              int64 = minInt * scale
-	a1000InFixed               int64 = 1000 * scale
-	aNeg1000InFixed            int64 = -1000 * scale
-	aCentInFixed               int64 = scale / 100
-	maxRoundUpThresholdInFixed int64 = 9 * 1e18  // 900_000_000_000_000_000
-	minRoundUpThresholdInFixed int64 = -9 * 1e18 // -900_000_000_000_000_000
-)
+	precision       = 12
+	scale           = 1e12
+	maxInt    int64 = int64(math.MaxInt64) / scale
+	minInt    int64 = int64(math.MinInt64) / scale
 
-var pow10Table []int64 = []int64{
-	1e0, 1e1, 1e2, 1e3, 1e4,
-	1e5, 1e6, 1e7, 1e8, 1e9,
-	1e10, 1e11, 1e12, 1e13, 1e14,
-	1e15, 1e16, 1e17, 1e18,
-}
+	maxIntInFixed int64 = maxInt * scale
+	minIntInFixed int64 = minInt * scale
+
+	a1000InFixed    int64 = 1000 * scale
+	aNeg1000InFixed int64 = -1000 * scale
+	aCentInFixed    int64 = scale / 100
+)
 
 // cache value from -1000.00 to 1000.00
 // with
@@ -53,6 +62,9 @@ var (
 )
 
 func init() {
+	// configure udecimal with our desired defaults
+	udecimal.SetDefaultParseMode(udecimal.ParseModeTrunc)
+
 	// init cache
 	for i := 0; i < cacheSize; i++ {
 		str := strconv.FormatFloat(float64(i-cacheOffset)/100, 'f', -1, 64)
@@ -62,43 +74,75 @@ func init() {
 	}
 }
 
-// API
+// Global configuration
+
+// SetDefaultParseModeError configures parsing to return an error when
+// fractional digits exceed the supported 19 digit precision.
+// This should be called once at startup before any parsing occurs.
+func SetDefaultParseModeError() {
+	parseModeError = true
+	udecimal.SetDefaultParseMode(udecimal.ParseModeError)
+}
+
+// SetDefaultParseModeTrunc configures parsing to silently truncate extra
+// fractional digits instead of returning an error (the default).
+// This should be called once at startup before any parsing occurs.
+func SetDefaultParseModeTrunc() {
+	parseModeError = false
+	udecimal.SetDefaultParseMode(udecimal.ParseModeTrunc)
+}
+
+// SetDefaultPrecision sets the fallback engine's default precision (maximum
+// fractional digits). The precision must be between 1 and 19. This should be
+// called once at startup.
+func SetDefaultPrecision(prec uint8) {
+	udecimal.SetDefaultPrecision(prec)
+}
+
+// Variables (matching shopspring/decimal)
+var (
+	// DivisionPrecision is the number of decimal places in the result when it
+	// doesn't divide exactly.
+	DivisionPrecision = 16
+
+	// PowPrecisionNegativeExponent specifies the maximum precision of the
+	// result (digits after the decimal point) when calculating a decimal to a
+	// negative power.
+	PowPrecisionNegativeExponent = 16
+
+	// MarshalJSONWithoutQuotes should be set to true if you want the decimal
+	// to be JSON marshaled as a number, instead of as a string.
+	MarshalJSONWithoutQuotes = false
+
+	// Zero constant, to make computations faster.
+	Zero = Decimal{fixed: 0}
+)
+
+// Decimal represents a fixed-point decimal number, API-compatible with
+// shopspring/decimal. The zero value is 0.
+type Decimal struct {
+	// fixed holds the value scaled by 10^12 when fallback is nil:
+	// 1.23 is stored as fixed = 1_230_000_000_000.
+	// max supported fixed value is 9_223_372.000_000_000_000
+	// min supported fixed value is -9_223_372.000_000_000_000
+	fixed int64
+
+	// fallback holds out-of-fixed-range values. nil means the fixed
+	// representation is authoritative. The pointee is never mutated.
+	fallback *udecimal.Decimal
+}
 
 // APIs are marked as either "optimized" or "fallbacked"
 // where "optimized" means that it's specially optimized
-// where "fallback" means that it's not optimized and fallback from decimal.Decimal
-// mostly due to lack of usage in Alpaca. we should be able to move "fallback" to "optimized" as needed.
-
-// Variables
-var (
-	DivisionPrecision        = decimal.DivisionPrecision
-	ExpMaxIterations         = decimal.ExpMaxIterations
-	MarshalJSONWithoutQuotes = decimal.MarshalJSONWithoutQuotes
-	Zero                     = Decimal{fixed: 0}
-)
-
-func RescalePair(d1 Decimal, d2 Decimal) (Decimal, Decimal) {
-	if d1.fallback == nil && d2.fallback == nil {
-		return d1, d2
-	}
-	dd1, dd2 := decimal.RescalePair(d1.asFallback(), d2.asFallback())
-	return newFromDecimal(dd1), newFromDecimal(dd2)
-}
-
-type Decimal struct {
-	// fallback to original decimal.Decimal if necessary
-	fallback *decimal.Decimal
-
-	// represent decimal with 12 precision, 1.23 will have `fixed = 1_230_000_000_000`
-	// max support decimal is 9_223_372.000_000_000_000
-	// min support decimal is -9_223_372.000_000_000_000
-	fixed int64
-}
+// where "fallback" means that it's not optimized and falls back to
+// udecimal.Decimal / big.Int arithmetic.
 
 // optimized:
 // Avg returns the average value of the provided first and rest Decimals
 func Avg(first Decimal, rest ...Decimal) Decimal {
-	return Sum(first, rest...).Div(NewFromInt(int64(1 + len(rest))))
+	divisor := NewFromInt(int64(1 + len(rest)))
+	sum := Sum(first, rest...)
+	return sum.Div(divisor)
 }
 
 // optimized:
@@ -126,79 +170,226 @@ func Min(first Decimal, rest ...Decimal) Decimal {
 }
 
 // optimized:
-// New returns a new fixed-point decimal, value * 10 ^ exp.
-func New(value int64, exp int32) Decimal {
-	d, ok := tryOptNew(value, exp)
-	if ok {
-		return d
+// Sum returns the combined total of the provided first and rest Decimals
+func Sum(first Decimal, rest ...Decimal) Decimal {
+	result := first
+	for _, item := range rest {
+		result = result.Add(item)
 	}
-	return newFromDecimal(decimal.New(value, exp))
-}
-
-func tryOptNew(value int64, exp int32) (Decimal, bool) {
-	if exp >= -12 {
-		if exp <= 0 {
-			s := pow10Table[-exp]
-			if value >= minInt*s && value <= maxInt*s {
-				return Decimal{fixed: value * pow10Table[precision+exp]}, true
-			}
-		} else if exp <= 6 { // when exp > 6, it would be greater than maxInt
-			s := pow10Table[exp]
-			if value >= minInt/s && value <= maxInt/s {
-				return Decimal{fixed: value * pow10Table[precision+exp]}, true
-			}
-		}
-	}
-	return Decimal{}, false
-}
-
-// fallback:
-// NewFromBigInt returns a new Decimal from a big.Int, value * 10 ^ exp
-func NewFromBigInt(value *big.Int, exp int32) Decimal {
-	return newFromDecimal(decimal.NewFromBigInt(value, exp))
+	return result
 }
 
 // optimized:
-// NewFromFloat converts a float64 to Decimal.
+// New returns a new fixed-point decimal, value * 10 ^ exp.
+func New(value int64, exp int32) Decimal {
+	if exp >= -12 && exp <= 6 {
+		// fast bounds check for the common exponent range
+		e := int(exp) + precision
+		s := pow10Table[e]
+		if value <= maxIntInFixed/s && value >= minIntInFixed/s {
+			return Decimal{fixed: value * s}
+		}
+	}
+	return newFromInt64Exp(value, int64(exp))
+}
+
+// optimized:
+// NewFromBigInt returns a new Decimal from a big.Int, value * 10 ^ exp
+func NewFromBigInt(value *big.Int, exp int32) Decimal {
+	if value.IsInt64() {
+		return New(value.Int64(), exp)
+	}
+	return decimalFromBigParts(value, int64(exp))
+}
+
+// fallback:
+// NewFromBigRat returns a new Decimal from a big.Rat. The numerator and
+// denominator are divided and rounded to the given precision.
+func NewFromBigRat(value *big.Rat, precision int32) Decimal {
+	num := NewFromBigInt(value.Num(), 0)
+	denom := NewFromBigInt(value.Denom(), 0)
+	return num.DivRound(denom, precision)
+}
+
+// optimized:
+// NewFromFloat converts a float64 to Decimal. Like shopspring, the result
+// contains the minimal number of digits that round-trip through float64.
 //
 // NOTE: this will panic on NaN, +/-inf
 func NewFromFloat(f float64) Decimal {
-	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return newFromDecimal(decimal.NewFromFloat(f))
+	af := math.Abs(f)
+	// Fast path: for |f| < 8192, ulp(f) <= 2^-40 < 1e-12, so at most one
+	// 12-fractional-digit decimal round-trips to f; if one exists it equals
+	// the shortest representation that the slow path would parse.
+	if af < 8192 {
+		n := math.Floor(af * 1e12) // exact: af*1e12 < 2^53
+		if n/1e12 != af {
+			n++
+		}
+		if n/1e12 == af { // correctly-rounded division == ParseFloat round-trip
+			fixed := int64(n)
+			if math.Signbit(f) {
+				fixed = -fixed
+			}
+			return Decimal{fixed: fixed}
+		}
 	}
-	// Convert float to string to avoid precision issues
+	return newFromFloatSlow(f)
+}
+
+func newFromFloatSlow(f float64) Decimal {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		panic(fmt.Sprintf("Cannot create a Decimal from %v", f))
+	}
+	// Convert float to string to avoid precision issues.
+	// If the minimal representation exceeds 19 fractional digits
+	// (udecimal's max precision), re-format with rounding to 19 places.
 	str := strconv.FormatFloat(f, 'f', -1, 64)
+	if dotIdx := strings.IndexByte(str, '.'); dotIdx >= 0 && len(str)-dotIdx-1 > 19 {
+		str = strconv.FormatFloat(f, 'f', 19, 64)
+	}
 	d, err := NewFromString(str)
 	if err != nil {
-		return newFromDecimal(decimal.NewFromFloat(f))
+		panic(fmt.Sprintf("alpacadecimal.NewFromFloat: %v", err))
 	}
 	return d
 }
 
 // fallback:
-// NewFromFloat32 converts a float32 to Decimal.
-//
-// The converted number will contain the number of significant digits that can be
-// represented in a float with reliable roundtrip.
-// This is typically 6-8 digits depending on the input.
-// See https://www.exploringbinary.com/decimal-precision-of-binary-floating-point-numbers/ for more information.
-//
-// For slightly faster conversion, use NewFromFloatWithExponent where you can specify the precision in absolute terms.
+// NewFromFloat32 converts a float32 to Decimal, using the same
+// shortest-representation algorithm as shopspring (it differs from strconv's
+// in rare 1-ulp cases, and parity wins here).
 //
 // NOTE: this will panic on NaN, +/-inf
 func NewFromFloat32(f float32) Decimal {
-	return newFromDecimal(decimal.NewFromFloat32(f))
+	if f == 0 {
+		return Zero
+	}
+	// XOR is a workaround for https://github.com/golang/go/issues/26285
+	a := math.Float32bits(f) ^ 0x80808080
+	return newFromFloatBits(float64(f), uint64(a)^0x80808080, &float32info)
+}
+
+// newFromFloatBits ports shopspring's newFromFloat: the shortest decimal
+// representation that reconstructs the float exactly.
+func newFromFloatBits(val float64, bits uint64, flt *floatInfo) Decimal {
+	if math.IsNaN(val) || math.IsInf(val, 0) {
+		panic(fmt.Sprintf("Cannot create a Decimal from %v", val))
+	}
+	exp := int(bits>>flt.mantbits) & (1<<flt.expbits - 1)
+	mant := bits & (uint64(1)<<flt.mantbits - 1)
+
+	switch exp {
+	case 0:
+		// denormalized
+		exp++
+	default:
+		// add implicit top bit
+		mant |= uint64(1) << flt.mantbits
+	}
+	exp += flt.bias
+
+	var dd decimal
+	dd.Assign(mant)
+	dd.Shift(exp - int(flt.mantbits))
+	dd.neg = bits>>(flt.expbits+flt.mantbits) != 0
+
+	roundShortest(&dd, mant, exp, flt)
+	// floats have at most 17 significant digits, so the mantissa fits int64
+	var m int64
+	for i := 0; i < dd.nd; i++ {
+		m = m*10 + int64(dd.d[i]-'0')
+	}
+	if dd.neg {
+		m = -m
+	}
+	return newFromInt64Exp(m, int64(dd.dp)-int64(dd.nd))
 }
 
 // fallback:
 // NewFromFloatWithExponent converts a float64 to Decimal, with an arbitrary
-// number of fractional digits.
+// number of fractional digits. The implementation mirrors shopspring's exactly
+// (binary expansion of the float, rounded half away from zero at 10^exp).
 //
 // Example:
 //
 //	NewFromFloatWithExponent(123.456, -2).String() // output: "123.46"
 func NewFromFloatWithExponent(value float64, exp int32) Decimal {
-	return newFromDecimal(decimal.NewFromFloatWithExponent(value, exp))
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		panic(fmt.Sprintf("Cannot create a Decimal from %v", value))
+	}
+
+	bits64 := math.Float64bits(value)
+	mant := bits64 & (1<<52 - 1)
+	exp2 := int32((bits64 >> 52) & (1<<11 - 1))
+	sign := bits64 >> 63
+
+	if exp2 == 0 {
+		if mant == 0 {
+			return Decimal{}
+		}
+		// subnormal
+		exp2++
+	} else {
+		// normal
+		mant |= 1 << 52
+	}
+
+	exp2 -= 1023 + 52
+
+	// normalizing base-2 values
+	for mant&1 == 0 {
+		mant = mant >> 1
+		exp2++
+	}
+
+	// maximum number of fractional base-10 digits to represent 2^N exactly
+	// cannot be more than -N if N<0
+	if exp < 0 && exp < exp2 {
+		if exp2 < 0 {
+			exp = exp2
+		} else {
+			exp = 0
+		}
+	}
+
+	// representing 10^M * 2^N as 5^M * 2^(M+N)
+	exp2 -= exp
+
+	temp := big.NewInt(1)
+	dMant := big.NewInt(int64(mant))
+
+	// applying 5^M
+	five := big.NewInt(5)
+	if exp > 0 {
+		temp = temp.SetInt64(int64(exp))
+		temp = temp.Exp(five, temp, nil)
+	} else if exp < 0 {
+		temp = temp.SetInt64(-int64(exp))
+		temp = temp.Exp(five, temp, nil)
+		dMant = dMant.Mul(dMant, temp)
+		temp = temp.SetUint64(1)
+	}
+
+	// applying 2^(M+N)
+	if exp2 > 0 {
+		dMant = dMant.Lsh(dMant, uint(exp2))
+	} else if exp2 < 0 {
+		temp = temp.Lsh(temp, uint(-exp2))
+	}
+
+	// rounding and downscaling
+	if exp > 0 || exp2 < 0 {
+		halfDown := new(big.Int).Rsh(temp, 1)
+		dMant = dMant.Add(dMant, halfDown)
+		dMant = dMant.Quo(dMant, temp)
+	}
+
+	if sign == 1 {
+		dMant = dMant.Neg(dMant)
+	}
+
+	return decimalFromBigParts(dMant, int64(exp))
 }
 
 // fallback:
@@ -206,11 +397,8 @@ func NewFromFloatWithExponent(value float64, exp int32) Decimal {
 // The second argument - replRegexp, is a regular expression that is used to find characters that should be
 // removed from given decimal string representation. All matched characters will be replaced with an empty string.
 func NewFromFormattedString(value string, replRegexp *regexp.Regexp) (Decimal, error) {
-	d, err := decimal.NewFromFormattedString(value, replRegexp)
-	if err != nil {
-		return Zero, err
-	}
-	return newFromDecimal(d), nil
+	cleaned := replRegexp.ReplaceAllString(value, "")
+	return NewFromString(cleaned)
 }
 
 // optimized:
@@ -219,7 +407,8 @@ func NewFromInt(x int64) Decimal {
 	if x >= minInt && x <= maxInt {
 		return Decimal{fixed: x * scale}
 	}
-	return newFromDecimal(decimal.NewFromInt(x))
+	fb, _ := udecimal.NewFromInt64(x, 0)
+	return newFromFallback(fb)
 }
 
 // optimized:
@@ -229,18 +418,23 @@ func NewFromInt32(value int32) Decimal {
 }
 
 // optimized:
+// NewFromUint64 converts an uint64 to Decimal.
+func NewFromUint64(value uint64) Decimal {
+	if value <= uint64(maxInt) {
+		return Decimal{fixed: int64(value) * scale}
+	}
+	fb, _ := udecimal.NewFromUint64(value, 0)
+	return newFromFallback(fb)
+}
+
+// optimized:
 // NewFromString returns a new Decimal from a string representation.
+// Scientific notation ("1.23e4") is supported, like shopspring.
 func NewFromString(value string) (Decimal, error) {
 	if fixed, ok := parseFixed(value); ok {
 		return Decimal{fixed: fixed}, nil
 	}
-
-	// fallback
-	d, err := decimal.NewFromString(value)
-	if err != nil {
-		return Zero, err
-	}
-	return newFromDecimal(d), nil
+	return parseSlow(value)
 }
 
 // optimized:
@@ -255,34 +449,27 @@ func RequireFromString(value string) Decimal {
 }
 
 // optimized:
-// Sum returns the combined total of the provided first and rest Decimals
-func Sum(first Decimal, rest ...Decimal) Decimal {
-	result := first
-	for _, item := range rest {
-		result = result.Add(item)
-	}
-	return result
-}
-
-// optimized:
 // Abs returns the absolute value of the decimal.
 func (d Decimal) Abs() Decimal {
 	if d.fallback == nil {
 		if d.fixed >= 0 {
 			return d
-		} else {
-			return Decimal{fixed: -d.fixed}
 		}
+		return Decimal{fixed: -d.fixed}
 	}
-	return newFromDecimal(d.fallback.Abs())
+	return d.absSlow()
+}
+
+func (d Decimal) absSlow() Decimal {
+	return newFromFallback(d.fallback.Abs())
 }
 
 // optimized:
 // Add returns d + d2.
 func (d Decimal) Add(d2 Decimal) Decimal {
-	// if result of add is not overflow,
-	// we can keep result as optimized format as well.
-	// otherwise, we would need to fallback to decimal.Decimal
+	// if result of add does not overflow,
+	// we can keep result in fixed form as well.
+	// otherwise, we need to fall back to udecimal.Decimal
 	if d.fallback == nil && d2.fallback == nil {
 		// check overflow
 		// based on https://stackoverflow.com/a/33643773
@@ -295,43 +482,242 @@ func (d Decimal) Add(d2 Decimal) Decimal {
 				return Decimal{fixed: d.fixed + d2.fixed}
 			}
 		}
+		// overflow: result is out of fixed range for sure
+		return newFromFallback(d.asFallback().Add(d2.asFallback()))
 	}
-
-	return newFromDecimal(d.asFallback().Add(d2.asFallback()))
-}
-
-// fallback:
-// Atan returns the arctangent, in radians, of x.
-func (d Decimal) Atan() Decimal {
-	return newFromDecimal(d.asFallback().Atan())
-}
-
-// fallback:
-// BigFloat returns decimal as BigFloat.
-func (d Decimal) BigFloat() *big.Float {
-	return d.asFallback().BigFloat()
-}
-
-// fallback:
-// BigInt returns integer component of the decimal as a BigInt.
-func (d Decimal) BigInt() *big.Int {
-	return d.asFallback().BigInt()
+	// mixed operands: the result may fit the fixed range again
+	return NewFromUDecimal(d.asFallback().Add(d2.asFallback()))
 }
 
 // optimized:
-// Ceil returns the nearest integer value greater than or equal to d.
-func (d Decimal) Ceil() Decimal {
-	if d.fallback == nil {
-		m := d.fixed % scale
-		if m == 0 {
-			return Decimal{fixed: d.fixed}
+// Sub returns d - d2.
+func (d Decimal) Sub(d2 Decimal) Decimal {
+	if d.fallback == nil && d2.fallback == nil {
+		if d2.fixed > 0 {
+			if d.fixed >= minIntInFixed+d2.fixed {
+				return Decimal{fixed: d.fixed - d2.fixed}
+			}
+		} else {
+			if d.fixed <= maxIntInFixed+d2.fixed {
+				return Decimal{fixed: d.fixed - d2.fixed}
+			}
 		}
-		if m > 0 {
-			return Decimal{fixed: d.fixed - m + scale}
-		}
-		return Decimal{fixed: d.fixed - m}
+		return newFromFallback(d.asFallback().Sub(d2.asFallback()))
 	}
-	return newFromDecimal(d.asFallback().Ceil())
+	return NewFromUDecimal(d.asFallback().Sub(d2.asFallback()))
+}
+
+// optimized:
+// Mul returns d * d2
+func (d Decimal) Mul(d2 Decimal) Decimal {
+	if d.fallback == nil && d2.fallback == nil {
+		if fixed, ok := mul(d.fixed, d2.fixed); ok {
+			return Decimal{fixed: fixed}
+		}
+	}
+	return NewFromUDecimal(d.asFallback().Mul(d2.asFallback()))
+}
+
+// optimized:
+// Neg returns -d
+func (d Decimal) Neg() Decimal {
+	if d.fallback == nil {
+		return Decimal{fixed: -d.fixed}
+	}
+	return d.negSlow()
+}
+
+func (d Decimal) negSlow() Decimal {
+	return newFromFallback(d.fallback.Neg())
+}
+
+// optimized:
+// Div returns d / d2. If it doesn't divide exactly, the result will have
+// DivisionPrecision digits after the decimal point.
+func (d Decimal) Div(d2 Decimal) Decimal {
+	if d.fallback == nil && d2.fallback == nil {
+		if d2.fixed == 0 {
+			panic("decimal division by 0")
+		}
+		dp := DivisionPrecision
+		// the exact quotient has at most 12 fractional digits, so it equals
+		// the DivRound(dp) result only when dp covers all of them
+		if dp >= 12 {
+			if fixed, ok := div(d.fixed, d2.fixed); ok {
+				return Decimal{fixed: fixed}
+			}
+		}
+		if dp >= 0 && dp <= 19 {
+			if coef, neg, ok := divRoundBits(d.fixed, d2.fixed, dp); ok {
+				if u, err := udecimal.NewFromHiLo(neg, 0, coef, uint8(dp)); err == nil {
+					return NewFromUDecimal(u)
+				}
+			}
+		}
+	}
+	return d.DivRound(d2, int32(DivisionPrecision))
+}
+
+// optimized:
+// DivRound divides and rounds to a given precision
+// i.e. to an integer multiple of 10^(-precision)
+//
+//	for a positive quotient digit 5 is rounded up, away from 0
+//	if the quotient is negative then digit 5 is rounded down, away from 0
+//
+// Note that precision<0 is allowed as input.
+func (d Decimal) DivRound(d2 Decimal, precision int32) Decimal {
+	if d.fallback == nil && d2.fallback == nil {
+		if d2.fixed == 0 {
+			panic("decimal division by 0")
+		}
+		if precision >= 0 && precision <= 19 {
+			if coef, neg, ok := divRoundBits(d.fixed, d2.fixed, int(precision)); ok {
+				if u, err := udecimal.NewFromHiLo(neg, 0, coef, uint8(precision)); err == nil {
+					return NewFromUDecimal(u)
+				}
+			}
+		}
+	} else if precision >= 0 && precision <= 18 {
+		// udecimal.Div truncates the quotient at 19 digits, so rounding half
+		// away from zero at <= 18 digits sees the exact deciding digits.
+		fb2 := d2.asFallback()
+		if fb2.IsZero() {
+			panic("decimal division by 0")
+		}
+		q, err := d.asFallback().Div(fb2)
+		if err == nil {
+			return NewFromUDecimal(q.RoundHAZ(uint8(precision)))
+		}
+	}
+	return divRoundBig(d, d2, precision)
+}
+
+// optimized:
+// Mod returns d % d2.
+func (d Decimal) Mod(d2 Decimal) Decimal {
+	if d.fallback == nil && d2.fallback == nil {
+		if d2.fixed == 0 {
+			panic("decimal division by 0")
+		}
+		// remainder of the scaled integers; always representable since
+		// |d.fixed % d2.fixed| < |d2.fixed|
+		return Decimal{fixed: d.fixed % d2.fixed}
+	}
+	// The remainder needs at most max(prec1, prec2) <= 19 fractional digits,
+	// so udecimal computes it exactly.
+	fb2 := d2.asFallback()
+	if fb2.IsZero() {
+		panic("decimal division by 0")
+	}
+	r, err := d.asFallback().Mod(fb2)
+	if err == nil {
+		return NewFromUDecimal(r)
+	}
+	_, rr := quoRemBig(d, d2, 0)
+	return rr
+}
+
+// optimized:
+// QuoRem does division with remainder
+// d.QuoRem(d2,precision) returns quotient q and remainder r such that
+//
+//	d = d2 * q + r, q an integer multiple of 10^(-precision)
+//	0 <= r < abs(d2) * 10 ^(-precision) if d>=0
+//	0 >= r > -abs(d2) * 10 ^(-precision) if d<0
+//
+// Note that precision<0 is allowed as input.
+func (d Decimal) QuoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
+	if d.fallback == nil && d2.fallback == nil {
+		if d2.fixed == 0 {
+			panic("decimal division by 0")
+		}
+		if precision == 0 {
+			q := d.fixed / d2.fixed
+			if q <= maxInt && q >= minInt {
+				return Decimal{fixed: q * scale}, Decimal{fixed: d.fixed % d2.fixed}
+			}
+		} else if precision > 0 && precision <= 7 {
+			if q, r, ok := quoRemFixed(d.fixed, d2.fixed, int(precision)); ok {
+				return q, r
+			}
+		}
+	} else if q, r, ok := quoRemFallback(d, d2, precision); ok {
+		return q, r
+	}
+	return quoRemBig(d, d2, precision)
+}
+
+// quoRemFallback computes QuoRem through udecimal when every intermediate is
+// exactly representable: max(prec1, prec2) + precision <= 19.
+func quoRemFallback(d, d2 Decimal, precision int32) (Decimal, Decimal, bool) {
+	if precision < 0 || precision > 18 {
+		return Decimal{}, Decimal{}, false
+	}
+	fb1 := d.asFallback()
+	fb2 := d2.asFallback()
+	if fb2.IsZero() {
+		panic("decimal division by 0")
+	}
+	maxPrec := int32(fb1.PrecUint())
+	if p2 := int32(fb2.PrecUint()); p2 > maxPrec {
+		maxPrec = p2
+	}
+	if maxPrec+precision > 19 {
+		return Decimal{}, Decimal{}, false
+	}
+	// scaled = d * 10^precision (exact); intQ integer, intR exact remainder
+	scaled := fb1.Mul(udecPow10[precision])
+	intQ, intR, err := scaled.QuoRem(fb2)
+	if err != nil {
+		return Decimal{}, Decimal{}, false
+	}
+	// q = intQ / 10^precision: exact, gains precision fractional digits.
+	// r = intR / 10^precision: exact since intR.prec + precision <= 19.
+	q, err1 := intQ.Div(udecPow10[precision])
+	r, err2 := intR.Div(udecPow10[precision])
+	if err1 != nil || err2 != nil {
+		return Decimal{}, Decimal{}, false
+	}
+	return NewFromUDecimal(q), NewFromUDecimal(r), true
+}
+
+// optimized:
+// Shift shifts the decimal in base 10. It shifts left when shift is positive
+// and right if shift is negative. In simpler terms, the given value for shift
+// is added to the exponent of the decimal.
+func (d Decimal) Shift(shift int32) Decimal {
+	if shift == 0 {
+		return d
+	}
+	if d.fallback == nil {
+		if fixed, ok := shiftFixed(d.fixed, shift); ok {
+			return Decimal{fixed: fixed}
+		}
+	}
+	coef, exp := d.toBigParts()
+	return decimalFromBigParts(coef, int64(exp)+int64(shift))
+}
+
+func shiftFixed(fixed int64, shift int32) (int64, bool) {
+	if shift > 0 {
+		if shift > 6 {
+			return 0, false
+		}
+		s := pow10Table[shift]
+		if fixed > maxIntInFixed/s || fixed < minIntInFixed/s {
+			return 0, false
+		}
+		return fixed * s, true
+	}
+	if shift < -18 {
+		return 0, false
+	}
+	s := pow10Table[-shift]
+	if fixed%s != 0 {
+		return 0, false
+	}
+	return fixed / s, true
 }
 
 // optimized:
@@ -355,55 +741,13 @@ func (d Decimal) Cmp(d2 Decimal) int {
 }
 
 // optimized:
-// Coefficient returns the coefficient of the decimal. It is scaled by 10^Exponent()
-func (d Decimal) Coefficient() *big.Int {
-	if d.fallback == nil {
-		return big.NewInt(d.fixed)
-	}
-	return d.asFallback().Coefficient()
-}
-
-// optimized:
-// CoefficientInt64 returns the coefficient of the decimal as int64. It is scaled by 10^Exponent()
-func (d Decimal) CoefficientInt64() int64 {
-	if d.fallback == nil {
-		return d.fixed
-	}
-	return d.asFallback().CoefficientInt64()
-}
-
-// optimized:
-// Copy returns a copy of decimal with the same value and exponent, but a different pointer to value.
-func (d Decimal) Copy() Decimal {
-	if d.fallback == nil {
-		return Decimal{fixed: d.fixed}
-	}
-	return newFromDecimal(d.fallback.Copy())
-}
-
-// fallback:
-// Cos returns the cosine of the radian argument x.
-func (d Decimal) Cos() Decimal {
-	return newFromDecimal(d.asFallback().Cos())
-}
-
-// optimized:
-// Div returns d / d2. If it doesn't divide exactly, the result will have
-// DivisionPrecision digits after the decimal point.
-func (d Decimal) Div(d2 Decimal) Decimal {
-	if d.fallback == nil && d2.fallback == nil {
-		fixed, ok := div(d.fixed, d2.fixed)
-		if ok {
-			return Decimal{fixed: fixed}
-		}
-	}
-	return d.DivRound(d2, int32(DivisionPrecision))
-}
-
-// fallback:
-// DivRound divides and rounds to a given precision
-func (d Decimal) DivRound(d2 Decimal, precision int32) Decimal {
-	return newFromDecimal(d.asFallback().DivRound(d2.asFallback(), precision))
+// Compare compares the numbers represented by d and d2 and returns:
+//
+//	-1 if d <  d2
+//	 0 if d == d2
+//	+1 if d >  d2
+func (d Decimal) Compare(d2 Decimal) int {
+	return d.Cmp(d2)
 }
 
 // optimized:
@@ -415,75 +759,9 @@ func (d Decimal) Equal(d2 Decimal) bool {
 	return d.asFallback().Equal(d2.asFallback())
 }
 
-// fallback:
-// Equals is deprecated, please use Equal method instead
+// Deprecated: Equals is deprecated, please use Equal method instead
 func (d Decimal) Equals(d2 Decimal) bool {
 	return d.Equal(d2)
-}
-
-// fallback:
-// ExpHullAbrham calculates the natural exponent of decimal (e to the power of d) using Hull-Abraham algorithm.
-// OverallPrecision argument specifies the overall precision of the result (integer part + decimal part).
-func (d Decimal) ExpHullAbrham(overallPrecision uint32) (Decimal, error) {
-	dec, err := d.asFallback().ExpHullAbrham(overallPrecision)
-	if err != nil {
-		return Zero, err
-	}
-	return newFromDecimal(dec), nil
-}
-
-// fallback:
-// ExpTaylor calculates the natural exponent of decimal (e to the power of d) using Taylor series expansion.
-// Precision argument specifies how precise the result must be (number of digits after decimal point).
-// Negative precision is allowed.
-func (d Decimal) ExpTaylor(precision int32) (Decimal, error) {
-	dec, err := d.asFallback().ExpTaylor(precision)
-	if err != nil {
-		return Zero, err
-	}
-	return newFromDecimal(dec), nil
-}
-
-// optimized:
-// Exponent returns the exponent, or scale component of the decimal.
-func (d Decimal) Exponent() int32 {
-	if d.fallback == nil {
-		return -precision
-	}
-	return d.fallback.Exponent()
-}
-
-// fallback:
-// Float64 returns the nearest float64 value for d and a bool indicating
-// whether f represents d exactly.
-func (d Decimal) Float64() (f float64, exact bool) {
-	return d.asFallback().Float64()
-}
-
-// optimized:
-// Floor returns the nearest integer value less than or equal to d.
-func (d Decimal) Floor() Decimal {
-	if d.fallback == nil {
-		m := d.fixed % scale
-		if m == 0 {
-			return Decimal{fixed: d.fixed}
-		}
-		if m > 0 {
-			return Decimal{fixed: d.fixed - m}
-		}
-		return Decimal{fixed: d.fixed - m - scale}
-	}
-	return newFromDecimal(d.asFallback().Floor())
-}
-
-// fallback: (can be optimized if needed)
-func (d *Decimal) GobDecode(data []byte) error {
-	return d.UnmarshalBinary(data)
-}
-
-// fallback: (can be optimized if needed)
-func (d Decimal) GobEncode() ([]byte, error) {
-	return d.MarshalBinary()
 }
 
 // optimized:
@@ -504,70 +782,6 @@ func (d Decimal) GreaterThanOrEqual(d2 Decimal) bool {
 	return d.asFallback().GreaterThanOrEqual(d2.asFallback())
 }
 
-// fallback:
-// InexactFloat64 returns the nearest float64 value for d.
-// It doesn't indicate if the returned value represents d exactly.
-func (d Decimal) InexactFloat64() float64 {
-	return d.asFallback().InexactFloat64()
-}
-
-// optimized:
-// IntPart returns the integer component of the decimal.
-func (d Decimal) IntPart() int64 {
-	if d.fallback == nil {
-		return d.fixed / scale
-	}
-	return d.fallback.IntPart()
-}
-
-// optimized:
-// IsInteger returns true when decimal can be represented as an integer value, otherwise, it returns false.
-func (d Decimal) IsInteger() bool {
-	if d.fallback == nil {
-		return d.fixed%scale == 0
-	}
-	return d.fallback.IsInteger()
-}
-
-// optimized:
-// IsNegative return
-//
-//	true if d < 0
-//	false if d == 0
-//	false if d > 0
-func (d Decimal) IsNegative() bool {
-	if d.fallback == nil {
-		return d.fixed < 0
-	}
-	return d.fallback.IsNegative()
-}
-
-// optimized:
-// IsPositive return
-//
-//	true if d > 0
-//	false if d == 0
-//	false if d < 0
-func (d Decimal) IsPositive() bool {
-	if d.fallback == nil {
-		return d.fixed > 0
-	}
-	return d.fallback.IsPositive()
-}
-
-// optimized:
-// IsZero return
-//
-//	true if d == 0
-//	false if d > 0
-//	false if d < 0
-func (d Decimal) IsZero() bool {
-	if d.fallback == nil {
-		return d.fixed == 0
-	}
-	return d.fallback.IsZero()
-}
-
 // optimized:
 // LessThan (LT) returns true when d is less than d2.
 func (d Decimal) LessThan(d2 Decimal) bool {
@@ -586,298 +800,6 @@ func (d Decimal) LessThanOrEqual(d2 Decimal) bool {
 	return d.asFallback().LessThanOrEqual(d2.asFallback())
 }
 
-// fallback:
-// MarshalBinary implements the encoding.BinaryMarshaler interface.
-func (d Decimal) MarshalBinary() (data []byte, err error) {
-	return d.asFallback().MarshalBinary()
-}
-
-// optimized:
-func (d Decimal) MarshalJSON() ([]byte, error) {
-	var str string
-	if MarshalJSONWithoutQuotes {
-		str = d.String()
-	} else {
-		str = "\"" + d.String() + "\""
-	}
-	return []byte(str), nil
-}
-
-// optimized:
-func (d Decimal) MarshalText() (text []byte, err error) {
-	return []byte(d.String()), nil
-}
-
-func (d Decimal) Mod(d2 Decimal) Decimal {
-	return newFromDecimal(d.asFallback().Mod(d2.asFallback()))
-}
-
-// optimized:
-// Mul returns d * d2
-func (d Decimal) Mul(d2 Decimal) Decimal {
-	if d.fallback == nil && d2.fallback == nil {
-		fixed, ok := mul(d.fixed, d2.fixed)
-		if ok {
-			return Decimal{fixed: fixed}
-		}
-	}
-	return newFromDecimal(d.asFallback().Mul(d2.asFallback()))
-}
-
-// optimized:
-// Neg returns -d
-func (d Decimal) Neg() Decimal {
-	if d.fallback == nil {
-		return Decimal{fixed: -d.fixed}
-	}
-	return newFromDecimal(d.fallback.Neg())
-}
-
-// fallback:
-// NumDigits returns the number of digits of the decimal coefficient (d.Value)
-func (d Decimal) NumDigits() int {
-	return d.asFallback().NumDigits()
-}
-
-// fallback:
-// Pow returns d to the power d2
-func (d Decimal) Pow(d2 Decimal) Decimal {
-	return newFromDecimal(d.asFallback().Pow(d2.asFallback()))
-}
-
-// fallback:
-// QuoRem does divsion with remainder
-func (d Decimal) QuoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
-	x, y := d.asFallback().QuoRem(d2.asFallback(), precision)
-	return newFromDecimal(x), newFromDecimal(y)
-}
-
-// fallback:
-// Rat returns a rational number representation of the decimal.
-func (d Decimal) Rat() *big.Rat {
-	return d.asFallback().Rat()
-}
-
-// optimized:
-// Round rounds the decimal to places decimal places.
-// If places < 0, it will round the integer part to the nearest 10^(-places).
-func (d Decimal) Round(places int32) Decimal {
-	if d.fallback == nil {
-		if places >= precision {
-			// no need to round
-			return d
-		}
-		if places >= 0 {
-			s := pow10Table[precision-places]
-			m := d.fixed % s
-			if m == 0 {
-				// no need to round
-				return d
-			}
-
-			if m > 0 {
-				if m*2 >= s {
-					return Decimal{fixed: d.fixed - m + s}
-				} else {
-					return Decimal{fixed: d.fixed - m}
-				}
-			} else {
-				if -m*2 >= s {
-					return Decimal{fixed: d.fixed - m - s}
-				} else {
-					return Decimal{fixed: d.fixed - m}
-				}
-			}
-		}
-	}
-	return newFromDecimal(d.asFallback().Round(places))
-}
-
-// fallback:
-// RoundBank rounds the decimal to places decimal places.
-// If the final digit to round is equidistant from the nearest two integers the
-// rounded value is taken as the even number
-//
-// If places < 0, it will round the integer part to the nearest 10^(-places).
-func (d Decimal) RoundBank(places int32) Decimal {
-	return newFromDecimal(d.asFallback().RoundBank(places))
-}
-
-// fallback:
-// RoundCash aka Cash/Penny/öre rounding rounds decimal to a specific
-// interval. The amount payable for a cash transaction is rounded to the nearest
-// multiple of the minimum currency unit available. The following intervals are
-// available: 5, 10, 25, 50 and 100; any other number throws a panic.
-//
-//	  5:   5 cent rounding 3.43 => 3.45
-//	 10:  10 cent rounding 3.45 => 3.50 (5 gets rounded up)
-//	 25:  25 cent rounding 3.41 => 3.50
-//	 50:  50 cent rounding 3.75 => 4.00
-//	100: 100 cent rounding 3.50 => 4.00
-//
-// For more details: https://en.wikipedia.org/wiki/Cash_rounding
-func (d Decimal) RoundCash(interval uint8) Decimal {
-	return newFromDecimal(d.asFallback().RoundCash(interval))
-}
-
-// fallback:
-// RoundCeil rounds the decimal towards +infinity.
-//
-// Example:
-//
-//	NewFromFloat(545).RoundCeil(-2).String()   // output: "600"
-//	NewFromFloat(500).RoundCeil(-2).String()   // output: "500"
-//	NewFromFloat(1.1001).RoundCeil(2).String() // output: "1.11"
-//	NewFromFloat(-1.454).RoundCeil(1).String() // output: "-1.4"
-func (d Decimal) RoundCeil(places int32) Decimal {
-	return newFromDecimal(d.asFallback().RoundCeil(places))
-}
-
-// optimized:
-// RoundDown rounds the decimal towards zero.
-//
-// Example:
-//
-//	NewFromFloat(545).RoundDown(-2).String()   // output: "500"
-//	NewFromFloat(-500).RoundDown(-2).String()   // output: "-500"
-//	NewFromFloat(1.1001).RoundDown(2).String() // output: "1.1"
-//	NewFromFloat(-1.454).RoundDown(1).String() // output: "-1.5"
-func (d Decimal) RoundDown(places int32) Decimal {
-	if d.fallback != nil || places <= -7 {
-		sd := d.asFallback().RoundDown(places)
-		if places <= -7 {
-			// always more than MaxIntInFixed
-			return newFromDecimal(sd)
-		}
-		// try optimize
-		return NewFromDecimal(sd)
-	}
-
-	if places >= precision {
-		// no need to round
-		return d
-	}
-
-	s := pow10Table[precision-places]
-	rescaled := (d.fixed / s) * s
-	if rescaled == d.fixed {
-		return d
-	}
-
-	return Decimal{fixed: rescaled}
-}
-
-// fallback:
-// RoundFloor rounds the decimal towards -infinity.
-//
-// Example:
-//
-//	NewFromFloat(545).RoundFloor(-2).String()   // output: "500"
-//	NewFromFloat(-500).RoundFloor(-2).String()   // output: "-500"
-//	NewFromFloat(1.1001).RoundFloor(2).String() // output: "1.1"
-//	NewFromFloat(-1.454).RoundFloor(1).String() // output: "-1.5"
-func (d Decimal) RoundFloor(places int32) Decimal {
-	return newFromDecimal(d.asFallback().RoundFloor(places))
-}
-
-// optimized:
-// RoundUp rounds the decimal away from zero.
-//
-// Example:
-//
-//	NewFromFloat(545).RoundUp(-2).String()   // output: "600"
-//	NewFromFloat(500).RoundUp(-2).String()   // output: "500"
-//	NewFromFloat(1.1001).RoundUp(2).String() // output: "1.11"
-//	NewFromFloat(-1.454).RoundUp(1).String() // output: "-1.4"
-func (d Decimal) RoundUp(places int32) Decimal {
-	if d.IsZero() {
-		return d
-	}
-	if d.fallback != nil ||
-		// roundup result is always more than MaxIntInFixed
-		places <= -7 ||
-		// roundup could cause fallback depending on fixed value
-		// i.e. 9_000_000.0 with places=-6 =>  9_000_000 (optimizable)
-		// i.e. 9_000_000.1 with places=-6 => 10_000_000 (fallback)
-		// i.e. 9_200_000.1 with places=-5 =>  9_300_000 (fallback)
-		(places < 0 &&
-			(d.fixed > maxRoundUpThresholdInFixed || d.fixed < minRoundUpThresholdInFixed)) {
-		// fallback
-		sd := d.asFallback().RoundUp(places)
-		if places <= -7 {
-			// always more than MaxIntInFixed
-			return newFromDecimal(sd)
-		}
-		// try optimize
-		// i.e. 0.12345678901234 with places=1 becomes 0.1 and optimized
-		r := NewFromDecimal(sd)
-		return r
-	}
-
-	if places >= precision {
-		// no need to round
-		return d
-	}
-
-	s := pow10Table[precision-places]
-	rescaled := (d.fixed / s) * s
-	if rescaled == d.fixed {
-		return d
-	}
-
-	if d.fixed >= 0 {
-		return Decimal{fixed: rescaled + (1 * s)}
-	}
-	return Decimal{fixed: rescaled - (1 * s)}
-}
-
-// optimized:
-// sql.Scanner interface
-func (d *Decimal) Scan(value interface{}) error {
-	switch v := value.(type) {
-	case float32:
-		*d = NewFromFloat32(v)
-		return nil
-
-	case float64:
-		*d = NewFromFloat(v)
-		return nil
-
-	case int64:
-		*d = NewFromInt(v)
-		return nil
-
-	case []byte:
-		fixed, ok := parseFixed(v)
-		if ok {
-			d.fixed = fixed
-			d.fallback = nil
-			return nil
-		}
-
-	case string:
-		fixed, ok := parseFixed(v)
-		if ok {
-			d.fixed = fixed
-			d.fallback = nil
-			return nil
-		}
-	}
-
-	var fallback decimal.Decimal
-	if err := fallback.Scan(value); err != nil {
-		return err
-	}
-	d.fallback = &fallback
-	return nil
-}
-
-// fallback:
-// Binary shift left (k > 0) or right (k < 0).
-func (d Decimal) Shift(shift int32) Decimal {
-	return newFromDecimal(d.asFallback().Shift(shift))
-}
-
 // optimized:
 // Sign returns:
 //
@@ -894,514 +816,277 @@ func (d Decimal) Sign() int {
 		}
 		return 0
 	}
-	return d.asFallback().Sign()
+	return d.signSlow()
 }
 
-// fallback:
-// Sin returns the sine of the radian argument x.
-func (d Decimal) Sin() Decimal {
-	return newFromDecimal(d.asFallback().Sin())
+func (d Decimal) signSlow() int {
+	return d.fallback.Sign()
 }
 
 // optimized:
-// String returns the string representation of the decimal
-// with the fixed point.
-func (d Decimal) String() string {
+// IsNegative return
+//
+//	true if d < 0
+//	false if d == 0
+//	false if d > 0
+func (d Decimal) IsNegative() bool {
 	if d.fallback == nil {
-		// cache hit
-		if d.fixed <= a1000InFixed && d.fixed >= aNeg1000InFixed && d.fixed%aCentInFixed == 0 {
-			return stringCache[d.fixed/aCentInFixed+cacheOffset]
-		}
-
-		// "-9223372.000000000000" => max length = 21 bytes
-		var s [21]byte
-		start := 7
-		end := 8
-
-		var ufixed uint64
-		if d.fixed >= 0 {
-			ufixed = uint64(d.fixed)
-		} else {
-			ufixed = uint64(d.fixed * -1)
-		}
-
-		integerPart := ufixed / scale
-		fractionalPart := ufixed % scale
-
-		// integer part
-		if integerPart == 0 {
-			s[start] = '0'
-		} else {
-			for integerPart >= 10 {
-				s[start] = byte(integerPart%10 + '0')
-				start--
-				integerPart /= 10
-			}
-			s[start] = byte(integerPart + '0')
-		}
-
-		// fractional part
-		if fractionalPart > 0 {
-			s[8] = '.'
-			for i := 20; i > 8; i-- {
-				is := fractionalPart % 10
-				fractionalPart /= 10
-				if is != 0 {
-					s[i] = byte(is + '0')
-					end = i + 1
-					for j := i - 1; j > 8; j-- {
-						s[j] = byte(fractionalPart%10 + '0')
-						fractionalPart /= 10
-					}
-					break
-				}
-			}
-		}
-
-		// sign part
-		if d.fixed < 0 {
-			start -= 1
-			s[start] = '-'
-		}
-
-		return string(s[start:end])
+		return d.fixed < 0
 	}
-
-	return d.fallback.String()
+	return d.negativeSlow()
 }
 
-// fallback:
-// StringFixed returns a rounded fixed-point string with places digits after
-// the decimal point.
-func (d Decimal) StringFixed(places int32) string {
-	return d.asFallback().StringFixed(places)
-}
-
-// fallback:
-// StringFixedBank returns a banker rounded fixed-point string with places digits
-// after the decimal point.
-func (d Decimal) StringFixedBank(places int32) string {
-	return d.asFallback().StringFixedBank(places)
-}
-
-// fallback:
-// StringFixedCash returns a Swedish/Cash rounded fixed-point string. For
-// more details see the documentation at function RoundCash.
-func (d Decimal) StringFixedCash(interval uint8) string {
-	return d.asFallback().StringFixedCash(interval)
-}
-
-// fallback:
-// DEPRECATED! Use StringFixed instead.
-func (d Decimal) StringScaled(exp int32) string {
-	return d.asFallback().StringScaled(exp)
+func (d Decimal) negativeSlow() bool {
+	return d.fallback.IsNeg()
 }
 
 // optimized:
-// Sub returns d - d2.
-func (d Decimal) Sub(d2 Decimal) Decimal {
-	return d.Add(d2.Neg())
-}
-
-// fallback:
-// Tan returns the tangent of the radian argument x.
-func (d Decimal) Tan() Decimal {
-	return newFromDecimal(d.asFallback().Tan())
-}
-
-// optimized:
-// Truncate truncates off digits from the number, without rounding.
-func (d Decimal) Truncate(precision int32) Decimal {
+// IsPositive return
+//
+//	true if d > 0
+//	false if d == 0
+//	false if d < 0
+func (d Decimal) IsPositive() bool {
 	if d.fallback == nil {
-		if precision >= 12 {
-			return d
-		}
-		s := pow10Table[12-precision]
-		return Decimal{fixed: d.fixed / s * s}
+		return d.fixed > 0
 	}
-	return newFromDecimal(d.asFallback().Truncate(precision))
+	return d.positiveSlow()
 }
 
-// fallback:
-// UnmarshalBinary implements the encoding.BinaryUnmarshaler interface. As a string representation
-// is already used when encoding to text, this method stores that string as []byte
-func (d *Decimal) UnmarshalBinary(data []byte) error {
-	var dd decimal.Decimal
-	if err := dd.UnmarshalBinary(data); err != nil {
-		return err
-	}
-	ddd := newFromDecimal(dd)
-	d.fixed = ddd.fixed
-	d.fallback = ddd.fallback
-	return nil
+func (d Decimal) positiveSlow() bool {
+	return d.fallback.IsPos()
 }
 
 // optimized:
-// UnmarshalJSON implements the json.Unmarshaler interface.
-func (d *Decimal) UnmarshalJSON(decimalBytes []byte) error {
-	if fixed, ok := parseFixed(decimalBytes); ok {
-		d.fixed = fixed
-		d.fallback = nil
-		return nil
-	}
-
-	var fallback decimal.Decimal
-	if err := fallback.UnmarshalJSON(decimalBytes); err != nil {
-		return err
-	}
-	d.fallback = &fallback
-	return nil
-}
-
-// optimized:
-// UnmarshalText implements the encoding.TextUnmarshaler interface for XML
-// deserialization.
-func (d *Decimal) UnmarshalText(text []byte) error {
-	if fixed, ok := parseFixed(text); ok {
-		d.fixed = fixed
-		d.fallback = nil
-		return nil
-	}
-
-	var dd decimal.Decimal
-	if err := dd.UnmarshalText(text); err != nil {
-		return err
-	}
-	ddd := newFromDecimal(dd)
-	d.fixed = ddd.fixed
-	d.fallback = ddd.fallback
-	return nil
-}
-
-// optimized:
-// sql.Valuer interface
-func (d Decimal) Value() (driver.Value, error) {
+// IsZero return
+//
+//	true if d == 0
+//	false if d > 0
+//	false if d < 0
+func (d Decimal) IsZero() bool {
 	if d.fallback == nil {
-		// cache hit
-		if d.fixed <= a1000InFixed && d.fixed >= aNeg1000InFixed && d.fixed%aCentInFixed == 0 {
-			return valueCache[d.fixed/aCentInFixed+cacheOffset], nil
-		}
-
-		return d.String(), nil
+		return d.fixed == 0
 	}
-
-	return d.fallback.Value()
-}
-
-// Extra API to support get internal state.
-// e.g. might be useful for flatbuffers encode / decode.
-func (d Decimal) GetFixed() int64 {
-	return d.fixed
-}
-
-func (d Decimal) GetFallback() *decimal.Decimal {
-	return d.fallback
-}
-
-func (d Decimal) IsOptimized() bool {
-	return d.fallback == nil
-}
-
-// NullDecimal support
-type NullDecimal struct {
-	Decimal Decimal
-	Valid   bool
-}
-
-func NewNullDecimal(d Decimal) NullDecimal {
-	return NullDecimal{
-		Decimal: d,
-		Valid:   true,
-	}
-}
-
-func (d NullDecimal) MarshalJSON() ([]byte, error) {
-	if !d.Valid {
-		return []byte("null"), nil
-	}
-	return d.Decimal.MarshalJSON()
-}
-
-func (d NullDecimal) MarshalText() (text []byte, err error) {
-	if !d.Valid {
-		return []byte{}, nil
-	}
-	return d.Decimal.MarshalText()
-}
-
-func (d *NullDecimal) Scan(value interface{}) error {
-	if value == nil {
-		d.Valid = false
-		return nil
-	}
-	d.Valid = true
-	return d.Decimal.Scan(value)
-}
-
-func (d *NullDecimal) UnmarshalJSON(decimalBytes []byte) error {
-	if string(decimalBytes) == "null" {
-		d.Valid = false
-		return nil
-	}
-	d.Valid = true
-	return d.Decimal.UnmarshalJSON(decimalBytes)
-}
-
-func (d *NullDecimal) UnmarshalText(text []byte) error {
-	str := string(text)
-
-	// check for empty XML or XML without body e.g., <tag></tag>
-	if str == "" {
-		d.Valid = false
-		return nil
-	}
-
-	if err := d.Decimal.UnmarshalText(text); err != nil {
-		d.Valid = false
-		return err
-	}
-
-	d.Valid = true
-	return nil
-}
-
-func (d NullDecimal) Value() (driver.Value, error) {
-	if !d.Valid {
-		return nil, nil
-	}
-	return d.Decimal.Value()
-}
-
-// optimized:
-// Create a new alpacadecimal.Decimal from a decimal.Decimal.
-// Attempts to set the fixed value if possible.
-func NewFromDecimal(d decimal.Decimal) Decimal {
-	co := d.Coefficient()
-	if !co.IsInt64() {
-		return newFromDecimal(d) // fallback
-	}
-	value := co.Int64()
-	exp := d.Exponent()
-	res, ok := tryOptNew(value, exp)
-	if ok {
-		return res
-	}
-	return newFromDecimal(d)
+	return d.fallback.IsZero()
 }
 
 // internal implementation
-func newFromDecimal(d decimal.Decimal) Decimal {
-	return Decimal{fallback: &d}
+
+func newFromFallback(u udecimal.Decimal) Decimal {
+	return Decimal{fallback: &u}
 }
 
-// sql support
-
-// common example: "0", "0.00", "0.001"
-func parseFixed[T string | []byte](v T) (int64, bool) {
-	// remove quotes if any
-	if len(v) > 2 && v[0] == '"' && v[len(v)-1] == '"' {
-		v = v[1 : len(v)-1]
-	}
-
-	// max len of fixed is 21, e.g. -9_223_372.000_000_000_000
-	if len(v) > 21 {
-		return 0, false
-	}
-
-	// remove trailing '0' if any (e.g. "0.000")
-	if len(v) > 1 && v[len(v)-1] == '0' {
-		for _, c := range []byte(v) {
-			if c == '.' {
-				for len(v) > 0 && v[len(v)-1] == '0' {
-					v = v[:len(v)-1]
-				}
-				break
-			}
-		}
-	}
-
-	// remove trailing '.' if any
-	if len(v) > 1 && v[len(v)-1] == '.' {
-		v = v[:len(v)-1]
-	}
-
-	negative := false
-	if len(v) > 1 {
-		switch v[0] {
-		case '+':
-			v = v[1:]
-		case '-':
-			v = v[1:]
-			negative = true
-		}
-	}
-
-	if len(v) == 0 {
-		return 0, false
-	}
-
-	var fixed int64 = 0
-
-	for i, c := range []byte(v) {
-		if '0' <= c && c <= '9' {
-			fixed *= 10
-			fixed += int64(c - '0')
-			if fixed >= maxInt {
-				// out of range
-				return 0, false
-			}
-		} else if c == '.' {
-			// handle fractional part
-			s := v[i+1:]
-			if len(s) > 12 {
-				// out of range
-				return 0, false
-			}
-			for _, c := range []byte(s) {
-				if '0' <= c && c <= '9' {
-					fixed *= 10
-					fixed += int64(c - '0')
-				} else {
-					// invalid case
-					return 0, false
-				}
-			}
-			fixed *= pow10Table[12-len(s)]
-			if negative {
-				return -fixed, true
-			} else {
-				return fixed, true
-			}
-		} else {
-			// invalid case
-			return 0, false
-		}
-	}
-	// no fractional part
-	if negative {
-		return -fixed * scale, true
-	} else {
-		return fixed * scale, true
-	}
-}
-
-func (d Decimal) asFallback() decimal.Decimal {
+func (d Decimal) asFallback() udecimal.Decimal {
 	if d.fallback == nil {
-		return decimal.New(d.fixed, -precision)
+		r, _ := udecimal.NewFromInt64(d.fixed, precision)
+		return r
 	}
 	return *d.fallback
 }
 
+// mul multiplies two fixed values exactly. ok is false when the result is not
+// representable in fixed form (out of range or needs >12 fractional digits).
 func mul(x, y int64) (int64, bool) {
-	if x == 0 || y == 0 {
-		return 0, true
-	}
-
-	negative := false
-
-	if x < 0 {
-		x = -x
-		negative = !negative
-	}
-
-	if y < 0 {
-		y = -y
-		negative = !negative
-	}
-
-	// x * y = (x_int + x_fractional) * (y_int + y_fractional)
-	//       = x_int * y_int + x_int * y_fractional
-	//       + x_fractional * y_fractional + x_fractional * y_fractional
-
-	x_int := x / scale
-	x_fractional := x % scale
-
-	y_int := y / scale
-	y_fractional := y % scale
-
-	var result int64
-
-	if x_int != 0 && y_int != 0 {
-		z := x_int * y_int
-		if z > maxInt {
-			// out of range
+	xf := x % scale
+	yf := y % scale
+	if xf|yf == 0 {
+		// both integers: single 64-bit multiply
+		a := x / scale
+		b := y / scale
+		p := a * b // |a|,|b| <= 9_223_372 so the product cannot overflow
+		if p > maxInt || p < minInt {
 			return 0, false
 		}
-		result = z * scale
+		return p * scale, true
 	}
 
-	if x_fractional != 0 && y_fractional != 0 {
-		// x_fractional * y_fractional = x_fractional_a * y_fractional_a
-		//                             + x_fractional_a * y_fractional_b
-		//                             + x_fractional_b * y_fractional_a
-		//                             + x_fractional_b * y_fractional_b
-		x_fractional_a := x_fractional / 1000_000
-		x_fractional_b := x_fractional % 1000_000
-		y_fractional_a := y_fractional / 1000_000
-		y_fractional_b := y_fractional % 1000_000
-
-		s := x_fractional_a * y_fractional_a
-
-		if x_fractional_b != 0 || y_fractional_b != 0 {
-			p1 := x_fractional_a*y_fractional_b + x_fractional_b*y_fractional_a
-			p2 := x_fractional_b * y_fractional_b
-
-			if p1%1000_000 != 0 || p2%scale != 0 {
-				// out of range
-				return 0, false
-			}
-
-			s += p1/1000_000 + p2/scale
-		}
-
-		if result <= maxIntInFixed-s {
-			result += s
-		} else {
-			// out of range
-			return 0, false
-		}
+	neg := (x < 0) != (y < 0)
+	hi, lo := bits.Mul64(uabs(x), uabs(y))
+	if hi >= 1e12 {
+		// quotient would exceed 64 bits: out of range for sure
+		return 0, false
 	}
-
-	if x_int != 0 && y_fractional != 0 {
-		p := x_int * y_fractional
-		if result <= maxIntInFixed-p {
-			result += p
-		} else {
-			// out of range
-			return 0, false
-		}
+	q, r := divu128By1e12(hi, lo)
+	if r != 0 || q > uint64(maxIntInFixed) {
+		return 0, false
 	}
-
-	if x_fractional != 0 && y_int != 0 {
-		p := x_fractional * y_int
-		if result <= maxIntInFixed-p {
-			result += p
-		} else {
-			// out of range
-			return 0, false
-		}
+	if neg {
+		return -int64(q), true
 	}
-
-	if negative {
-		result *= -1
-	}
-
-	return result, true
+	return int64(q), true
 }
 
+// div divides two fixed values exactly using 128-bit arithmetic.
+// ok is false when x/y is not exactly representable in fixed form.
 func div(x, y int64) (int64, bool) {
 	if x == 0 {
 		return 0, y != 0
 	}
-
-	fz := float64(x) / float64(y)
-	z := int64(fz * scale)
-
-	// this `mul` check is to ensure we do not
-	// lose precision from previous float64 operations.
-	if xx, ok := mul(y, z); ok && x == xx {
-		return z, true
-	} else {
+	if y == 0 {
 		return 0, false
 	}
+	neg := (x < 0) != (y < 0)
+	uy := uabs(y)
+	hi, lo := bits.Mul64(uabs(x), scale)
+	if hi >= uy {
+		// quotient exceeds 64 bits: cannot fit
+		return 0, false
+	}
+	q, r := bits.Div64(hi, lo, uy)
+	if r != 0 || q > uint64(maxIntInFixed) {
+		return 0, false
+	}
+	if neg {
+		return -int64(q), true
+	}
+	return int64(q), true
+}
+
+// divRoundBits computes round-half-away-from-zero(x/y * 10^prec) using 128/64
+// division. Returns the rounded coefficient at scale 10^prec plus its sign.
+// ok is false when the quotient needs more than 64 bits (caller falls back).
+func divRoundBits(x, y int64, prec int) (coef uint64, neg bool, ok bool) {
+	if y == 0 {
+		return 0, false, false
+	}
+	if x == 0 {
+		return 0, false, true
+	}
+	neg = (x < 0) != (y < 0)
+	uy := uabs(y)
+	hi, lo := bits.Mul64(uabs(x), pow10u[prec])
+	if hi >= uy {
+		return 0, false, false
+	}
+	q, r := bits.Div64(hi, lo, uy)
+	// round half away from zero; r*2 cannot overflow because uy < 2^63
+	if r*2 >= uy {
+		if q == math.MaxUint64 {
+			return 0, false, false
+		}
+		q++
+	}
+	return q, neg, true
+}
+
+// quoRemFixed computes QuoRem on fixed values for 0 < prec <= 7.
+// q = trunc(x/y at prec digits), r = x - q*y (exact).
+func quoRemFixed(x, y int64, prec int) (Decimal, Decimal, bool) {
+	neg := (x < 0) != (y < 0)
+	uy := uabs(y)
+	hi, lo := bits.Mul64(uabs(x), pow10u[prec])
+	if hi >= uy {
+		return Decimal{}, Decimal{}, false
+	}
+	qi, ri := bits.Div64(hi, lo, uy)
+	// q = qi * 10^-prec; in fixed units q = qi * 10^(12-prec)
+	qs := uint64(pow10Table[precision-prec])
+	if qi > uint64(maxIntInFixed)/qs {
+		return Decimal{}, Decimal{}, false
+	}
+	qf := int64(qi * qs)
+	if neg {
+		qf = -qf
+	}
+	// r = ri * 10^-prec in fixed units; sign follows the dividend.
+	// ri < uy <= maxIntInFixed in magnitude.
+	var rd Decimal
+	p := pow10u[prec]
+	if ri%p == 0 {
+		rf := int64(ri / p)
+		if x < 0 {
+			rf = -rf
+		}
+		rd = Decimal{fixed: rf}
+	} else {
+		// needs 12+prec (<= 19) fractional digits: exact in udecimal
+		fb, err := udecimal.NewFromInt64(signed64(ri, x < 0), uint8(precision+prec))
+		if err != nil {
+			return Decimal{}, Decimal{}, false
+		}
+		rd = newFromFallback(fb)
+	}
+	return Decimal{fixed: qf}, rd, true
+}
+
+func signed64(u uint64, neg bool) int64 {
+	if neg {
+		return -int64(u)
+	}
+	return int64(u)
+}
+
+// quoRemBig implements shopspring's exact QuoRem algorithm on big.Int parts.
+// It is the general path covering fallback operands and any precision,
+// including negative precision.
+func quoRemBig(d, d2 Decimal, precision int32) (Decimal, Decimal) {
+	dCoef, dExp := d.toBigParts()
+	d2Coef, d2Exp := d2.toBigParts()
+	q, r, scalerest := quoRemPartsRaw(dCoef, int64(dExp), d2Coef, int64(d2Exp), precision)
+	return decimalFromBigParts(q, -int64(precision)), decimalFromBigParts(r, scalerest)
+}
+
+// quoRemPartsRaw computes q = trunc(a/b at precision) and the exact remainder
+// r (as coefficient and exponent), mirroring shopspring's QuoRem.
+func quoRemPartsRaw(dCoef *big.Int, dExp int64, d2Coef *big.Int, d2Exp int64, precision int32) (q, r *big.Int, scalerest int64) {
+	if d2Coef.Sign() == 0 {
+		panic("decimal division by 0")
+	}
+	scale := -int64(precision)
+	e := dExp - d2Exp - scale
+	// d = a 10^ea, d2 = b 10^eb
+	var aa, bb big.Int
+	if e < 0 {
+		aa.Set(dCoef)
+		bb.Mul(d2Coef, bigPow10(-e))
+		scalerest = dExp
+	} else {
+		aa.Mul(dCoef, bigPow10(e))
+		bb.Set(d2Coef)
+		scalerest = scale + d2Exp
+	}
+	q, r = new(big.Int), new(big.Int)
+	q.QuoRem(&aa, &bb, r)
+	return q, r, scalerest
+}
+
+// divRoundParts implements shopspring's exact DivRound on big.Int parts:
+// half-away-from-zero rounding of (aCoef 10^aExp) / (bCoef 10^bExp) at
+// 10^-precision.
+func divRoundParts(aCoef *big.Int, aExp int64, bCoef *big.Int, bExp int64, precision int32) Decimal {
+	if bCoef.Sign() == 0 {
+		panic("decimal division by 0")
+	}
+	scale := -int64(precision)
+	e := aExp - bExp - scale
+	var aa, bb big.Int
+	if e < 0 {
+		aa.Set(aCoef)
+		bb.Mul(bCoef, bigPow10(-e))
+	} else {
+		aa.Mul(aCoef, bigPow10(e))
+		bb.Set(bCoef)
+	}
+	var q, r big.Int
+	q.QuoRem(&aa, &bb, &r)
+	// round away from zero when 2|r| >= |b|
+	r.Abs(&r)
+	r.Lsh(&r, 1)
+	if r.CmpAbs(&bb) >= 0 {
+		if aCoef.Sign()*bCoef.Sign() < 0 {
+			q.Sub(&q, oneBig)
+		} else {
+			q.Add(&q, oneBig)
+		}
+	}
+	return decimalFromBigParts(&q, scale)
+}
+
+var oneBig = big.NewInt(1)
+
+// divRoundBig is the Decimal-level wrapper over divRoundParts.
+func divRoundBig(d, d2 Decimal, precision int32) Decimal {
+	dCoef, dExp := d.toBigParts()
+	d2Coef, d2Exp := d2.toBigParts()
+	return divRoundParts(dCoef, int64(dExp), d2Coef, int64(d2Exp), precision)
 }
