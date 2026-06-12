@@ -1,0 +1,457 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/alpacahq/alpacadecimal/benchmarks
+cpu: Apple M1 Pro
+                                                    │ /tmp/bench_udecimal.txt │      /tmp/bench_zerodecimal.txt      │
+                                                    │         sec/op          │    sec/op     vs base                │
+New/alpacadecimal/optimized-10                                    2.117n ± 0%    2.080n ± 0%   -1.75% (p=0.000 n=10)
+New/alpacadecimal/fallback-10                                     24.04n ± 1%    18.04n ± 1%  -24.92% (p=0.000 n=10)
+NewFromString/alpacadecimal/optimized_small-10                    6.547n ± 1%    6.547n ± 0%        ~ (p=0.810 n=10)
+NewFromString/alpacadecimal/optimized_large-10                    17.77n ± 0%    17.74n ± 0%        ~ (p=0.195 n=10)
+NewFromString/alpacadecimal/fallback_bigint-10                    70.29n ± 1%    72.45n ± 0%   +3.07% (p=0.000 n=10)
+NewFromString/alpacadecimal/fallback_highprec-10                  63.79n ± 1%    66.25n ± 0%   +3.86% (p=0.000 n=10)
+NewFromFloat/alpacadecimal/optimized-10                           62.72n ± 0%    63.03n ± 0%   +0.49% (p=0.002 n=10)
+NewFromFloat/alpacadecimal/fallback-10                            112.3n ± 1%    114.1n ± 0%   +1.60% (p=0.000 n=10)
+NewFromFloat32/alpacadecimal/optimized-10                         182.5n ± 1%    182.2n ± 1%        ~ (p=0.444 n=10)
+NewFromFloat32/alpacadecimal/fallback-10                          177.3n ± 0%    174.0n ± 0%   -1.86% (p=0.000 n=10)
+NewFromFloatWithExponent/alpacadecimal/optimized-10               144.4n ± 0%    143.5n ± 0%   -0.62% (p=0.001 n=10)
+NewFromFloatWithExponent/alpacadecimal/fallback-10                186.8n ± 1%    179.8n ± 1%   -3.77% (p=0.000 n=10)
+NewFromInt/alpacadecimal/optimized-10                            1.9690n ± 0%   0.3114n ± 0%  -84.18% (p=0.000 n=10)
+NewFromInt/alpacadecimal/fallback-10                              20.94n ± 0%    12.82n ± 0%  -38.76% (p=0.000 n=10)
+NewFromInt32/alpacadecimal/optimized-10                          2.0325n ± 0%   0.3120n ± 1%  -84.65% (p=0.000 n=10)
+NewFromInt32/alpacadecimal/fallback-10                            20.95n ± 1%    12.88n ± 1%  -38.56% (p=0.000 n=10)
+NewFromBigInt/alpacadecimal/optimized-10                          3.119n ± 1%    3.119n ± 0%        ~ (p=0.696 n=10)
+NewFromBigInt/alpacadecimal/fallback-10                           24.98n ± 0%    19.44n ± 0%  -22.19% (p=0.000 n=10)
+NewFromFormattedString/alpacadecimal/optimized-10                 127.6n ± 0%    127.1n ± 0%   -0.35% (p=0.000 n=10)
+NewFromFormattedString/alpacadecimal/fallback-10                  248.6n ± 0%    249.1n ± 1%        ~ (p=0.085 n=10)
+Sum/alpacadecimal/optimized-10                                    4.750n ± 0%    4.864n ± 0%   +2.41% (p=0.000 n=10)
+Sum/alpacadecimal/fallback-10                                     50.15n ± 0%    37.37n ± 0%  -25.48% (p=0.000 n=10)
+Min/alpacadecimal/optimized-10                                    5.280n ± 0%    5.224n ± 0%   -1.08% (p=0.000 n=10)
+Min/alpacadecimal/fallback-10                                     15.63n ± 0%    10.59n ± 0%  -32.25% (p=0.000 n=10)
+Max/alpacadecimal/optimized-10                                    5.269n ± 0%    5.220n ± 0%   -0.94% (p=0.000 n=10)
+Max/alpacadecimal/fallback-10                                     15.60n ± 0%    10.59n ± 1%  -32.11% (p=0.000 n=10)
+Avg/alpacadecimal/optimized-10                                    11.69n ± 0%    10.76n ± 0%   -7.92% (p=0.000 n=10)
+Avg/alpacadecimal/fallback-10                                    108.60n ± 0%    74.28n ± 1%  -31.60% (p=0.000 n=10)
+Add/alpacadecimal/optimized-10                                    2.031n ± 0%    2.029n ± 0%        ~ (p=0.193 n=10)
+Add/alpacadecimal/fallback-10                                     24.64n ± 0%    17.89n ± 1%  -27.37% (p=0.000 n=10)
+Sub/alpacadecimal/optimized-10                                    2.030n ± 1%    2.028n ± 0%   -0.10% (p=0.047 n=10)
+Sub/alpacadecimal/fallback-10                                     26.79n ± 0%    19.50n ± 0%  -27.22% (p=0.000 n=10)
+Mul/alpacadecimal/optimized-10                                    4.814n ± 0%    4.748n ± 0%   -1.36% (p=0.000 n=10)
+Mul/alpacadecimal/fallback-10                                     27.54n ± 0%    19.11n ± 1%  -30.60% (p=0.000 n=10)
+Div/alpacadecimal/optimized-10                                    5.862n ± 0%    5.868n ± 0%        ~ (p=0.127 n=10)
+Div/alpacadecimal/fallback-10                                     56.84n ± 2%    36.29n ± 1%  -36.16% (p=0.000 n=10)
+DivRound/alpacadecimal/optimized-10                               9.675n ± 1%    7.162n ± 0%  -25.97% (p=0.000 n=10)
+DivRound/alpacadecimal/fallback-10                                53.04n ± 1%    36.37n ± 0%  -31.43% (p=0.000 n=10)
+Mod/alpacadecimal/optimized-10                                    2.039n ± 0%    2.036n ± 0%   -0.17% (p=0.045 n=10)
+Mod/alpacadecimal/fallback-10                                     24.61n ± 0%    16.02n ± 0%  -34.89% (p=0.000 n=10)
+Pow/alpacadecimal/optimized-10                                    17.84n ± 0%    16.94n ± 0%   -5.04% (p=0.000 n=10)
+Pow/alpacadecimal/fallback-10                                     110.6n ± 1%    107.4n ± 2%   -2.94% (p=0.000 n=10)
+QuoRem/alpacadecimal/optimized-10                                 5.330n ± 1%    5.355n ± 3%   +0.48% (p=0.035 n=10)
+QuoRem/alpacadecimal/fallback-10                                  78.98n ± 0%    35.43n ± 0%  -55.13% (p=0.000 n=10)
+Shift/alpacadecimal/optimized-10                                  2.503n ± 1%    2.179n ± 0%  -12.92% (p=0.000 n=10)
+Shift/alpacadecimal/fallback-10                                   56.24n ± 1%    50.63n ± 1%   -9.97% (p=0.000 n=10)
+Neg/alpacadecimal/optimized-10                                   0.3124n ± 0%   0.3114n ± 0%        ~ (p=0.061 n=10)
+Neg/alpacadecimal/fallback-10                                     20.46n ± 1%    13.17n ± 4%  -35.63% (p=0.000 n=10)
+Abs/alpacadecimal/optimized-10                                   0.3132n ± 1%   0.3160n ± 2%        ~ (p=0.470 n=10)
+Abs/alpacadecimal/fallback-10                                     20.09n ± 1%    13.16n ± 2%  -34.49% (p=0.000 n=10)
+Cmp/alpacadecimal/optimized-10                                    2.034n ± 4%    2.030n ± 0%   -0.17% (p=0.015 n=10)
+Cmp/alpacadecimal/fallback-10                                     7.510n ± 1%    7.213n ± 2%   -3.95% (p=0.000 n=10)
+Cmp/alpacadecimal/mixed-10                                        9.418n ± 1%    8.095n ± 0%  -14.05% (p=0.000 n=10)
+Equal/alpacadecimal/optimized-10                                  2.033n ± 0%    2.030n ± 0%        ~ (p=0.384 n=10)
+Equal/alpacadecimal/fallback-10                                   7.481n ± 0%    6.272n ± 2%  -16.16% (p=0.000 n=10)
+GreaterThan/alpacadecimal/optimized-10                            2.031n ± 0%    2.031n ± 0%        ~ (p=0.337 n=10)
+GreaterThan/alpacadecimal/fallback-10                             7.787n ± 0%    5.952n ± 1%  -23.57% (p=0.000 n=10)
+GreaterThanOrEqual/alpacadecimal/optimized-10                     2.044n ± 2%    2.035n ± 2%        ~ (p=0.343 n=10)
+GreaterThanOrEqual/alpacadecimal/fallback-10                      7.510n ± 1%    5.926n ± 1%  -21.10% (p=0.000 n=10)
+LessThan/alpacadecimal/optimized-10                               2.030n ± 0%    2.034n ± 2%        ~ (p=0.146 n=10)
+LessThan/alpacadecimal/fallback-10                                7.474n ± 0%    5.917n ± 0%  -20.83% (p=0.000 n=10)
+LessThanOrEqual/alpacadecimal/optimized-10                        2.029n ± 0%    2.032n ± 0%        ~ (p=0.090 n=10)
+LessThanOrEqual/alpacadecimal/fallback-10                         7.477n ± 0%    5.982n ± 2%  -19.99% (p=0.000 n=10)
+Sign/alpacadecimal/optimized-10                                  2.0280n ± 1%   0.3124n ± 0%  -84.59% (p=0.000 n=10)
+Sign/alpacadecimal/fallback-10                                   2.8040n ± 0%   0.4677n ± 0%  -83.32% (p=0.000 n=10)
+IsZero/alpacadecimal/optimized-10                                0.3125n ± 3%   0.3113n ± 0%   -0.38% (p=0.002 n=10)
+IsZero/alpacadecimal/fallback-10                                 2.0470n ± 2%   0.3117n ± 0%  -84.77% (p=0.000 n=10)
+IsPositive/alpacadecimal/optimized-10                            2.0290n ± 0%   0.3114n ± 0%  -84.65% (p=0.000 n=10)
+IsPositive/alpacadecimal/fallback-10                             2.1840n ± 0%   0.3114n ± 0%  -85.74% (p=0.000 n=10)
+IsNegative/alpacadecimal/optimized-10                            2.0280n ± 0%   0.3114n ± 0%  -84.64% (p=0.000 n=10)
+IsNegative/alpacadecimal/fallback-10                             2.1815n ± 0%   0.3114n ± 0%  -85.73% (p=0.000 n=10)
+IsInteger/alpacadecimal/optimized-10                             0.3118n ± 0%   0.3138n ± 1%        ~ (p=0.118 n=10)
+IsInteger/alpacadecimal/fallback-10                               2.493n ± 0%    2.497n ± 0%        ~ (p=0.120 n=10)
+IntPart/alpacadecimal/optimized-10                                2.046n ± 0%    2.044n ± 0%        ~ (p=0.584 n=10)
+IntPart/alpacadecimal/fallback-10                                 7.168n ± 0%    4.047n ± 0%  -43.54% (p=0.000 n=10)
+NumDigits/alpacadecimal/optimized-10                              2.493n ± 0%    2.496n ± 0%   +0.12% (p=0.042 n=10)
+NumDigits/alpacadecimal/fallback-10                               2.454n ± 0%    2.256n ± 0%   -8.05% (p=0.000 n=10)
+Exponent/alpacadecimal/optimized-10                              0.3129n ± 1%   0.3114n ± 0%        ~ (p=0.118 n=10)
+Exponent/alpacadecimal/fallback-10                               0.3115n ± 0%   0.3116n ± 0%        ~ (p=0.670 n=10)
+Coefficient/alpacadecimal/optimized-10                            26.44n ± 1%    26.59n ± 1%   +0.61% (p=0.005 n=10)
+Coefficient/alpacadecimal/fallback-10                             27.75n ± 1%    28.33n ± 2%   +2.09% (p=0.002 n=10)
+CoefficientInt64/alpacadecimal/optimized-10                       2.028n ± 0%    2.026n ± 0%        ~ (p=0.103 n=10)
+CoefficientInt64/alpacadecimal/fallback-10                        2.033n ± 1%    2.026n ± 0%   -0.34% (p=0.000 n=10)
+Float64/alpacadecimal/optimized-10                                1.935n ± 0%    1.930n ± 1%        ~ (p=0.305 n=10)
+Float64/alpacadecimal/fallback-10                                 211.4n ± 1%    217.9n ± 1%   +3.10% (p=0.000 n=10)
+InexactFloat64/alpacadecimal/optimized-10                         2.027n ± 0%    2.024n ± 0%        ~ (p=0.376 n=10)
+InexactFloat64/alpacadecimal/fallback-10                          2.029n ± 0%    2.026n ± 0%   -0.15% (p=0.003 n=10)
+BigInt/alpacadecimal/optimized-10                                 26.48n ± 1%    27.18n ± 1%   +2.62% (p=0.000 n=10)
+BigInt/alpacadecimal/fallback-10                                  68.83n ± 1%    69.72n ± 1%   +1.30% (p=0.011 n=10)
+BigFloat/alpacadecimal/optimized-10                               220.8n ± 2%    222.4n ± 1%   +0.72% (p=0.022 n=10)
+BigFloat/alpacadecimal/fallback-10                                257.3n ± 0%    257.2n ± 0%        ~ (p=0.698 n=10)
+Rat/alpacadecimal/optimized-10                                    118.5n ± 0%    117.9n ± 0%   -0.51% (p=0.041 n=10)
+Rat/alpacadecimal/fallback-10                                     151.2n ± 1%    155.5n ± 1%   +2.78% (p=0.000 n=10)
+Copy/alpacadecimal/optimized-10                                  0.3115n ± 0%   0.3113n ± 0%        ~ (p=0.445 n=10)
+Copy/alpacadecimal/fallback-10                                   0.3114n ± 1%   0.3114n ± 0%        ~ (p=0.925 n=10)
+Round/alpacadecimal/optimized-10                                  1.993n ± 0%    1.993n ± 0%        ~ (p=0.725 n=10)
+Round/alpacadecimal/fallback-10                                   27.30n ± 0%    18.73n ± 1%  -31.39% (p=0.000 n=10)
+RoundBank/alpacadecimal/optimized-10                              2.579n ± 0%    2.583n ± 0%        ~ (p=0.141 n=10)
+RoundBank/alpacadecimal/fallback-10                               25.05n ± 0%    19.57n ± 0%  -21.88% (p=0.000 n=10)
+RoundCash/alpacadecimal/optimized-10                              15.28n ± 0%    14.46n ± 0%   -5.37% (p=0.000 n=10)
+RoundCash/alpacadecimal/fallback-10                              144.10n ± 0%    97.55n ± 1%  -32.30% (p=0.000 n=10)
+Truncate/alpacadecimal/optimized-10                               2.053n ± 0%    2.048n ± 1%        ~ (p=0.080 n=10)
+Truncate/alpacadecimal/fallback-10                                24.57n ± 0%    19.33n ± 1%  -21.33% (p=0.000 n=10)
+Ceil/alpacadecimal/optimized-10                                   2.134n ± 1%    2.134n ± 0%        ~ (p=0.956 n=10)
+Ceil/alpacadecimal/fallback-10                                    25.23n ± 0%    19.54n ± 1%  -22.54% (p=0.000 n=10)
+Floor/alpacadecimal/optimized-10                                  2.017n ± 0%    2.025n ± 0%   +0.40% (p=0.001 n=10)
+Floor/alpacadecimal/fallback-10                                   24.70n ± 1%    19.51n ± 0%  -21.01% (p=0.000 n=10)
+RoundUp/alpacadecimal/optimized-10                                177.7n ± 0%    177.3n ± 1%        ~ (p=0.076 n=10)
+RoundUp/alpacadecimal/with_fallback-10                            263.7n ± 0%    262.1n ± 2%   -0.61% (p=0.041 n=10)
+RoundUp/alpacadecimal/fallback_only-10                            85.48n ± 0%    82.68n ± 1%   -3.28% (p=0.000 n=10)
+RoundDown/alpacadecimal/optimized-10                              177.3n ± 0%    177.4n ± 0%        ~ (p=0.360 n=10)
+RoundDown/alpacadecimal/with_fallback-10                          355.9n ± 1%    331.2n ± 0%   -6.93% (p=0.000 n=10)
+RoundDown/alpacadecimal/fallback_only-10                          168.2n ± 1%    145.2n ± 1%  -13.67% (p=0.000 n=10)
+RoundCeil/alpacadecimal/optimized-10                              2.038n ± 0%    2.040n ± 1%        ~ (p=0.809 n=10)
+RoundCeil/alpacadecimal/fallback-10                               39.24n ± 1%    19.56n ± 0%  -50.15% (p=0.000 n=10)
+RoundFloor/alpacadecimal/optimized-10                             1.962n ± 1%    1.961n ± 0%        ~ (p=0.540 n=10)
+RoundFloor/alpacadecimal/fallback-10                              33.03n ± 0%    19.52n ± 0%  -40.90% (p=0.000 n=10)
+String/alpacadecimal/optimized-10                                 2.261n ± 0%    2.258n ± 0%        ~ (p=0.223 n=10)
+String/alpacadecimal/fallback-10                                  23.10n ± 1%    22.82n ± 1%   -1.17% (p=0.000 n=10)
+StringFixed/alpacadecimal/optimized-10                            17.74n ± 1%    17.70n ± 1%        ~ (p=0.840 n=10)
+StringFixed/alpacadecimal/fallback-10                             55.80n ± 1%    45.67n ± 1%  -18.16% (p=0.000 n=10)
+StringFixedBank/alpacadecimal/optimized-10                        18.15n ± 1%    18.17n ± 1%        ~ (p=0.869 n=10)
+StringFixedBank/alpacadecimal/fallback-10                         53.44n ± 1%    46.80n ± 1%  -12.43% (p=0.000 n=10)
+StringFixedCash/alpacadecimal/optimized-10                        30.75n ± 0%    29.77n ± 0%   -3.19% (p=0.000 n=10)
+StringFixedCash/alpacadecimal/fallback-10                         195.8n ± 0%    148.1n ± 1%  -24.34% (p=0.000 n=10)
+Value/alpacadecimal/cached-10                                     2.336n ± 0%    2.413n ± 0%   +3.30% (p=0.000 n=10)
+Value/alpacadecimal/optimized-10                                  39.74n ± 1%    40.43n ± 1%   +1.72% (p=0.000 n=10)
+Value/alpacadecimal/fallback-10                                   38.45n ± 0%    38.88n ± 1%   +1.12% (p=0.002 n=10)
+Scan/alpacadecimal/optimized-10                                   10.17n ± 0%    10.15n ± 0%   -0.15% (p=0.049 n=10)
+Scan/alpacadecimal/fallback-10                                    70.61n ± 1%    72.26n ± 0%   +2.34% (p=0.001 n=10)
+MarshalJSON/alpacadecimal/optimized-10                            182.1n ± 0%    181.5n ± 0%   -0.27% (p=0.036 n=10)
+MarshalJSON/alpacadecimal/fallback-10                             206.4n ± 1%    205.8n ± 0%        ~ (p=0.127 n=10)
+UnmarshalJSON/alpacadecimal/optimized-10                          105.6n ± 0%    104.1n ± 0%   -1.37% (p=0.000 n=10)
+UnmarshalJSON/alpacadecimal/fallback-10                           186.0n ± 0%    188.7n ± 1%   +1.48% (p=0.000 n=10)
+MarshalText/alpacadecimal/optimized-10                            26.56n ± 0%    26.29n ± 1%   -1.04% (p=0.002 n=10)
+MarshalText/alpacadecimal/fallback-10                             36.10n ± 1%    35.67n ± 1%   -1.16% (p=0.000 n=10)
+UnmarshalText/alpacadecimal/optimized-10                          10.59n ± 0%    10.64n ± 1%        ~ (p=0.266 n=10)
+UnmarshalText/alpacadecimal/fallback-10                           72.14n ± 1%    73.64n ± 0%   +2.09% (p=0.000 n=10)
+MarshalBinary/alpacadecimal/optimized-10                          18.06n ± 0%    18.07n ± 1%        ~ (p=0.403 n=10)
+MarshalBinary/alpacadecimal/fallback-10                           22.06n ± 1%    21.67n ± 1%   -1.79% (p=0.000 n=10)
+UnmarshalBinary/alpacadecimal/optimized-10                        7.484n ± 0%    7.515n ± 1%   +0.42% (p=0.020 n=10)
+UnmarshalBinary/alpacadecimal/fallback-10                         25.21n ± 1%    20.88n ± 1%  -17.18% (p=0.000 n=10)
+GobEncode/alpacadecimal/optimized-10                              18.03n ± 0%    18.18n ± 1%   +0.89% (p=0.000 n=10)
+GobEncode/alpacadecimal/fallback-10                               22.00n ± 0%    21.67n ± 1%   -1.48% (p=0.000 n=10)
+GobDecode/alpacadecimal/optimized-10                              7.531n ± 1%    7.475n ± 0%   -0.74% (p=0.000 n=10)
+GobDecode/alpacadecimal/fallback-10                               25.27n ± 0%    20.86n ± 1%  -17.47% (p=0.000 n=10)
+geomean                                                           12.83n         10.40n       -18.93%
+
+                                                    │ /tmp/bench_udecimal.txt │      /tmp/bench_zerodecimal.txt      │
+                                                    │          B/op           │    B/op     vs base                  │
+New/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+New/alpacadecimal/fallback-10                                    32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+NewFromString/alpacadecimal/optimized_small-10                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromString/alpacadecimal/optimized_large-10                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromString/alpacadecimal/fallback_bigint-10                   32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+NewFromString/alpacadecimal/fallback_highprec-10                 32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+NewFromFloat/alpacadecimal/optimized-10                          16.00 ± 0%     16.00 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromFloat/alpacadecimal/fallback-10                           48.00 ± 0%     40.00 ± 0%  -16.67% (p=0.000 n=10)
+NewFromFloat32/alpacadecimal/optimized-10                        0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromFloat32/alpacadecimal/fallback-10                         32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+NewFromFloatWithExponent/alpacadecimal/optimized-10              136.0 ± 0%     136.0 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromFloatWithExponent/alpacadecimal/fallback-10               216.0 ± 0%     208.0 ± 0%   -3.70% (p=0.000 n=10)
+NewFromInt/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromInt/alpacadecimal/fallback-10                             32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+NewFromInt32/alpacadecimal/optimized-10                          0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromInt32/alpacadecimal/fallback-10                           32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+NewFromBigInt/alpacadecimal/optimized-10                         0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromBigInt/alpacadecimal/fallback-10                          32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+NewFromFormattedString/alpacadecimal/optimized-10                32.00 ± 0%     32.00 ± 0%        ~ (p=1.000 n=10) ¹
+NewFromFormattedString/alpacadecimal/fallback-10                 88.00 ± 0%     80.00 ± 0%   -9.09% (p=0.000 n=10)
+Sum/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Sum/alpacadecimal/fallback-10                                    64.00 ± 0%     48.00 ± 0%  -25.00% (p=0.000 n=10)
+Min/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Min/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Max/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Max/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Avg/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Avg/alpacadecimal/fallback-10                                    96.00 ± 0%     72.00 ± 0%  -25.00% (p=0.000 n=10)
+Add/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Add/alpacadecimal/fallback-10                                    32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Sub/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Sub/alpacadecimal/fallback-10                                    32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Mul/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Mul/alpacadecimal/fallback-10                                    32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Div/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Div/alpacadecimal/fallback-10                                    32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+DivRound/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+DivRound/alpacadecimal/fallback-10                               32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Mod/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Mod/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Pow/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Pow/alpacadecimal/fallback-10                                    128.0 ± 0%     120.0 ± 0%   -6.25% (p=0.000 n=10)
+QuoRem/alpacadecimal/optimized-10                                0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+QuoRem/alpacadecimal/fallback-10                                 32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Shift/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Shift/alpacadecimal/fallback-10                                  72.00 ± 0%     64.00 ± 0%  -11.11% (p=0.000 n=10)
+Neg/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Neg/alpacadecimal/fallback-10                                    32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Abs/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Abs/alpacadecimal/fallback-10                                    32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Cmp/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Cmp/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Cmp/alpacadecimal/mixed-10                                       0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Equal/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Equal/alpacadecimal/fallback-10                                  0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+GreaterThan/alpacadecimal/optimized-10                           0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+GreaterThan/alpacadecimal/fallback-10                            0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+GreaterThanOrEqual/alpacadecimal/optimized-10                    0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+GreaterThanOrEqual/alpacadecimal/fallback-10                     0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+LessThan/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+LessThan/alpacadecimal/fallback-10                               0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+LessThanOrEqual/alpacadecimal/optimized-10                       0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+LessThanOrEqual/alpacadecimal/fallback-10                        0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Sign/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Sign/alpacadecimal/fallback-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsZero/alpacadecimal/optimized-10                                0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsZero/alpacadecimal/fallback-10                                 0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsPositive/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsPositive/alpacadecimal/fallback-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsNegative/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsNegative/alpacadecimal/fallback-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsInteger/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IsInteger/alpacadecimal/fallback-10                              0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IntPart/alpacadecimal/optimized-10                               0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+IntPart/alpacadecimal/fallback-10                                0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NumDigits/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+NumDigits/alpacadecimal/fallback-10                              0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Exponent/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Exponent/alpacadecimal/fallback-10                               0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Coefficient/alpacadecimal/optimized-10                           40.00 ± 0%     40.00 ± 0%        ~ (p=1.000 n=10) ¹
+Coefficient/alpacadecimal/fallback-10                            40.00 ± 0%     40.00 ± 0%        ~ (p=1.000 n=10) ¹
+CoefficientInt64/alpacadecimal/optimized-10                      0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+CoefficientInt64/alpacadecimal/fallback-10                       0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Float64/alpacadecimal/optimized-10                               0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Float64/alpacadecimal/fallback-10                                240.0 ± 0%     240.0 ± 0%        ~ (p=1.000 n=10) ¹
+InexactFloat64/alpacadecimal/optimized-10                        0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+InexactFloat64/alpacadecimal/fallback-10                         0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+BigInt/alpacadecimal/optimized-10                                40.00 ± 0%     40.00 ± 0%        ~ (p=1.000 n=10) ¹
+BigInt/alpacadecimal/fallback-10                                 88.00 ± 0%     88.00 ± 0%        ~ (p=1.000 n=10) ¹
+BigFloat/alpacadecimal/optimized-10                              176.0 ± 0%     176.0 ± 0%        ~ (p=1.000 n=10) ¹
+BigFloat/alpacadecimal/fallback-10                               184.0 ± 0%     184.0 ± 0%        ~ (p=1.000 n=10) ¹
+Rat/alpacadecimal/optimized-10                                   104.0 ± 0%     104.0 ± 0%        ~ (p=1.000 n=10) ¹
+Rat/alpacadecimal/fallback-10                                    184.0 ± 0%     184.0 ± 0%        ~ (p=1.000 n=10) ¹
+Copy/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Copy/alpacadecimal/fallback-10                                   0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Round/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Round/alpacadecimal/fallback-10                                  32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+RoundBank/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+RoundBank/alpacadecimal/fallback-10                              32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+RoundCash/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+RoundCash/alpacadecimal/fallback-10                             128.00 ± 0%     96.00 ± 0%  -25.00% (p=0.000 n=10)
+Truncate/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Truncate/alpacadecimal/fallback-10                               32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Ceil/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Ceil/alpacadecimal/fallback-10                                   32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+Floor/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Floor/alpacadecimal/fallback-10                                  32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+RoundUp/alpacadecimal/optimized-10                               0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+RoundUp/alpacadecimal/with_fallback-10                           32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+RoundUp/alpacadecimal/fallback_only-10                           32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+RoundDown/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+RoundDown/alpacadecimal/with_fallback-10                         160.0 ± 0%     120.0 ± 0%  -25.00% (p=0.000 n=10)
+RoundDown/alpacadecimal/fallback_only-10                         160.0 ± 0%     120.0 ± 0%  -25.00% (p=0.000 n=10)
+RoundCeil/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+RoundCeil/alpacadecimal/fallback-10                              32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+RoundFloor/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+RoundFloor/alpacadecimal/fallback-10                             32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+String/alpacadecimal/optimized-10                                0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+String/alpacadecimal/fallback-10                                 16.00 ± 0%     16.00 ± 0%        ~ (p=1.000 n=10) ¹
+StringFixed/alpacadecimal/optimized-10                           4.000 ± 0%     4.000 ± 0%        ~ (p=1.000 n=10) ¹
+StringFixed/alpacadecimal/fallback-10                            48.00 ± 0%     40.00 ± 0%  -16.67% (p=0.000 n=10)
+StringFixedBank/alpacadecimal/optimized-10                       4.000 ± 0%     4.000 ± 0%        ~ (p=1.000 n=10) ¹
+StringFixedBank/alpacadecimal/fallback-10                        48.00 ± 0%     40.00 ± 0%  -16.67% (p=0.000 n=10)
+StringFixedCash/alpacadecimal/optimized-10                       4.000 ± 0%     4.000 ± 0%        ~ (p=1.000 n=10) ¹
+StringFixedCash/alpacadecimal/fallback-10                        160.0 ± 0%     128.0 ± 0%  -20.00% (p=0.000 n=10)
+Value/alpacadecimal/cached-10                                    0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Value/alpacadecimal/optimized-10                                 32.00 ± 0%     32.00 ± 0%        ~ (p=1.000 n=10) ¹
+Value/alpacadecimal/fallback-10                                  32.00 ± 0%     32.00 ± 0%        ~ (p=1.000 n=10) ¹
+Scan/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+Scan/alpacadecimal/fallback-10                                   32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+MarshalJSON/alpacadecimal/optimized-10                           56.00 ± 0%     56.00 ± 0%        ~ (p=1.000 n=10) ¹
+MarshalJSON/alpacadecimal/fallback-10                            64.00 ± 0%     64.00 ± 0%        ~ (p=1.000 n=10) ¹
+UnmarshalJSON/alpacadecimal/optimized-10                         144.0 ± 0%     144.0 ± 0%        ~ (p=1.000 n=10) ¹
+UnmarshalJSON/alpacadecimal/fallback-10                          192.0 ± 0%     184.0 ± 0%   -4.17% (p=0.000 n=10)
+MarshalText/alpacadecimal/optimized-10                           24.00 ± 0%     24.00 ± 0%        ~ (p=1.000 n=10) ¹
+MarshalText/alpacadecimal/fallback-10                            32.00 ± 0%     32.00 ± 0%        ~ (p=1.000 n=10) ¹
+UnmarshalText/alpacadecimal/optimized-10                         0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+UnmarshalText/alpacadecimal/fallback-10                          48.00 ± 0%     40.00 ± 0%  -16.67% (p=0.000 n=10)
+MarshalBinary/alpacadecimal/optimized-10                         16.00 ± 0%     16.00 ± 0%        ~ (p=1.000 n=10) ¹
+MarshalBinary/alpacadecimal/fallback-10                          24.00 ± 0%     24.00 ± 0%        ~ (p=1.000 n=10) ¹
+UnmarshalBinary/alpacadecimal/optimized-10                       0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+UnmarshalBinary/alpacadecimal/fallback-10                        32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+GobEncode/alpacadecimal/optimized-10                             16.00 ± 0%     16.00 ± 0%        ~ (p=1.000 n=10) ¹
+GobEncode/alpacadecimal/fallback-10                              24.00 ± 0%     24.00 ± 0%        ~ (p=1.000 n=10) ¹
+GobDecode/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%        ~ (p=1.000 n=10) ¹
+GobDecode/alpacadecimal/fallback-10                              32.00 ± 0%     24.00 ± 0%  -25.00% (p=0.000 n=10)
+geomean                                                                     ²                -6.95%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
+
+                                                    │ /tmp/bench_udecimal.txt │     /tmp/bench_zerodecimal.txt      │
+                                                    │        allocs/op        │ allocs/op   vs base                 │
+New/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+New/alpacadecimal/fallback-10                                    1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromString/alpacadecimal/optimized_small-10                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromString/alpacadecimal/optimized_large-10                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromString/alpacadecimal/fallback_bigint-10                   1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromString/alpacadecimal/fallback_highprec-10                 1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFloat/alpacadecimal/optimized-10                          1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFloat/alpacadecimal/fallback-10                           2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFloat32/alpacadecimal/optimized-10                        0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFloat32/alpacadecimal/fallback-10                         1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFloatWithExponent/alpacadecimal/optimized-10              7.000 ± 0%     7.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFloatWithExponent/alpacadecimal/fallback-10               9.000 ± 0%     9.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromInt/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromInt/alpacadecimal/fallback-10                             1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromInt32/alpacadecimal/optimized-10                          0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromInt32/alpacadecimal/fallback-10                           1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromBigInt/alpacadecimal/optimized-10                         0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromBigInt/alpacadecimal/fallback-10                          1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFormattedString/alpacadecimal/optimized-10                3.000 ± 0%     3.000 ± 0%       ~ (p=1.000 n=10) ¹
+NewFromFormattedString/alpacadecimal/fallback-10                 5.000 ± 0%     5.000 ± 0%       ~ (p=1.000 n=10) ¹
+Sum/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Sum/alpacadecimal/fallback-10                                    2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Min/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Min/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Max/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Max/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Avg/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Avg/alpacadecimal/fallback-10                                    3.000 ± 0%     3.000 ± 0%       ~ (p=1.000 n=10) ¹
+Add/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Add/alpacadecimal/fallback-10                                    1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Sub/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Sub/alpacadecimal/fallback-10                                    1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Mul/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Mul/alpacadecimal/fallback-10                                    1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Div/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Div/alpacadecimal/fallback-10                                    1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+DivRound/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+DivRound/alpacadecimal/fallback-10                               1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Mod/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Mod/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Pow/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Pow/alpacadecimal/fallback-10                                    5.000 ± 0%     5.000 ± 0%       ~ (p=1.000 n=10) ¹
+QuoRem/alpacadecimal/optimized-10                                0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+QuoRem/alpacadecimal/fallback-10                                 1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Shift/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Shift/alpacadecimal/fallback-10                                  3.000 ± 0%     3.000 ± 0%       ~ (p=1.000 n=10) ¹
+Neg/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Neg/alpacadecimal/fallback-10                                    1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Abs/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Abs/alpacadecimal/fallback-10                                    1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Cmp/alpacadecimal/optimized-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Cmp/alpacadecimal/fallback-10                                    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Cmp/alpacadecimal/mixed-10                                       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Equal/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Equal/alpacadecimal/fallback-10                                  0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+GreaterThan/alpacadecimal/optimized-10                           0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+GreaterThan/alpacadecimal/fallback-10                            0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+GreaterThanOrEqual/alpacadecimal/optimized-10                    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+GreaterThanOrEqual/alpacadecimal/fallback-10                     0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+LessThan/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+LessThan/alpacadecimal/fallback-10                               0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+LessThanOrEqual/alpacadecimal/optimized-10                       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+LessThanOrEqual/alpacadecimal/fallback-10                        0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Sign/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Sign/alpacadecimal/fallback-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsZero/alpacadecimal/optimized-10                                0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsZero/alpacadecimal/fallback-10                                 0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsPositive/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsPositive/alpacadecimal/fallback-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsNegative/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsNegative/alpacadecimal/fallback-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsInteger/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IsInteger/alpacadecimal/fallback-10                              0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IntPart/alpacadecimal/optimized-10                               0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+IntPart/alpacadecimal/fallback-10                                0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NumDigits/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+NumDigits/alpacadecimal/fallback-10                              0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Exponent/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Exponent/alpacadecimal/fallback-10                               0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Coefficient/alpacadecimal/optimized-10                           2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Coefficient/alpacadecimal/fallback-10                            2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+CoefficientInt64/alpacadecimal/optimized-10                      0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+CoefficientInt64/alpacadecimal/fallback-10                       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Float64/alpacadecimal/optimized-10                               0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Float64/alpacadecimal/fallback-10                                12.00 ± 0%     12.00 ± 0%       ~ (p=1.000 n=10) ¹
+InexactFloat64/alpacadecimal/optimized-10                        0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+InexactFloat64/alpacadecimal/fallback-10                         0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+BigInt/alpacadecimal/optimized-10                                2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+BigInt/alpacadecimal/fallback-10                                 5.000 ± 0%     5.000 ± 0%       ~ (p=1.000 n=10) ¹
+BigFloat/alpacadecimal/optimized-10                              7.000 ± 0%     7.000 ± 0%       ~ (p=1.000 n=10) ¹
+BigFloat/alpacadecimal/fallback-10                               7.000 ± 0%     7.000 ± 0%       ~ (p=1.000 n=10) ¹
+Rat/alpacadecimal/optimized-10                                   6.000 ± 0%     6.000 ± 0%       ~ (p=1.000 n=10) ¹
+Rat/alpacadecimal/fallback-10                                    10.00 ± 0%     10.00 ± 0%       ~ (p=1.000 n=10) ¹
+Copy/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Copy/alpacadecimal/fallback-10                                   0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Round/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Round/alpacadecimal/fallback-10                                  1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundBank/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundBank/alpacadecimal/fallback-10                              1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundCash/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundCash/alpacadecimal/fallback-10                              4.000 ± 0%     4.000 ± 0%       ~ (p=1.000 n=10) ¹
+Truncate/alpacadecimal/optimized-10                              0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Truncate/alpacadecimal/fallback-10                               1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Ceil/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Ceil/alpacadecimal/fallback-10                                   1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+Floor/alpacadecimal/optimized-10                                 0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Floor/alpacadecimal/fallback-10                                  1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundUp/alpacadecimal/optimized-10                               0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundUp/alpacadecimal/with_fallback-10                           1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundUp/alpacadecimal/fallback_only-10                           1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundDown/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundDown/alpacadecimal/with_fallback-10                         5.000 ± 0%     5.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundDown/alpacadecimal/fallback_only-10                         5.000 ± 0%     5.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundCeil/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundCeil/alpacadecimal/fallback-10                              1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundFloor/alpacadecimal/optimized-10                            0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+RoundFloor/alpacadecimal/fallback-10                             1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+String/alpacadecimal/optimized-10                                0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+String/alpacadecimal/fallback-10                                 1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+StringFixed/alpacadecimal/optimized-10                           1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+StringFixed/alpacadecimal/fallback-10                            2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+StringFixedBank/alpacadecimal/optimized-10                       1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+StringFixedBank/alpacadecimal/fallback-10                        2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+StringFixedCash/alpacadecimal/optimized-10                       1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+StringFixedCash/alpacadecimal/fallback-10                        6.000 ± 0%     6.000 ± 0%       ~ (p=1.000 n=10) ¹
+Value/alpacadecimal/cached-10                                    0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Value/alpacadecimal/optimized-10                                 2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Value/alpacadecimal/fallback-10                                  2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Scan/alpacadecimal/optimized-10                                  0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+Scan/alpacadecimal/fallback-10                                   1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+MarshalJSON/alpacadecimal/optimized-10                           4.000 ± 0%     4.000 ± 0%       ~ (p=1.000 n=10) ¹
+MarshalJSON/alpacadecimal/fallback-10                            4.000 ± 0%     4.000 ± 0%       ~ (p=1.000 n=10) ¹
+UnmarshalJSON/alpacadecimal/optimized-10                         1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+UnmarshalJSON/alpacadecimal/fallback-10                          3.000 ± 0%     3.000 ± 0%       ~ (p=1.000 n=10) ¹
+MarshalText/alpacadecimal/optimized-10                           1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+MarshalText/alpacadecimal/fallback-10                            2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+UnmarshalText/alpacadecimal/optimized-10                         0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+UnmarshalText/alpacadecimal/fallback-10                          2.000 ± 0%     2.000 ± 0%       ~ (p=1.000 n=10) ¹
+MarshalBinary/alpacadecimal/optimized-10                         1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+MarshalBinary/alpacadecimal/fallback-10                          1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+UnmarshalBinary/alpacadecimal/optimized-10                       0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+UnmarshalBinary/alpacadecimal/fallback-10                        1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+GobEncode/alpacadecimal/optimized-10                             1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+GobEncode/alpacadecimal/fallback-10                              1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+GobDecode/alpacadecimal/optimized-10                             0.000 ± 0%     0.000 ± 0%       ~ (p=1.000 n=10) ¹
+GobDecode/alpacadecimal/fallback-10                              1.000 ± 0%     1.000 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                                                     ²               +0.00%                ²
+¹ all samples are equal
+² summaries must be >0 to compute geomean
