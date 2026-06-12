@@ -1081,6 +1081,14 @@ func TestDecimal(t *testing.T) {
 		require.Equal(t, "-1.23", y.Truncate(2).String())
 		require.Equal(t, "-1.234", y.Truncate(3).String())
 		require.Equal(t, "-1.234", y.Truncate(4).String())
+
+		// regression for CRYP-2334: high precision must not panic and is a
+		// no-op once all stored digits are kept (cross-library coverage for
+		// 0..19 lives in the fuzz module)
+		for i := int32(3); i < 25; i++ {
+			require.Equal(t, "1.234", x.Truncate(i).String())
+			require.Equal(t, "-1.234", y.Truncate(i).String())
+		}
 	})
 
 	t.Run("Decimal.UnmarshalBinary", func(t *testing.T) {
