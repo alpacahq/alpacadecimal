@@ -1,4 +1,4 @@
-.PHONY: all clean gen-asm clear-asm test bench bench-x view-bench-cpu-result view-bench-mem-result clean-up fuzz fuzz-seeds fuzz-all clean-corpus
+.PHONY: all clean gen-asm clear-asm test bench bench-x bench-pgo pgo-profile view-bench-cpu-result view-bench-mem-result clean-up fuzz fuzz-seeds fuzz-all clean-corpus
 
 gen-asm:
 	go build -x -n -v *.go 2>&1 | sed -n "/^# import config/,/EOF$$/p" |grep -v EOF > importcfg
@@ -17,6 +17,14 @@ bench:
 
 bench-x:
 	$(MAKE) -C benchmarks bench-x
+
+# regenerate the default.pgo profile shipped at the repo root
+pgo-profile:
+	go run ./internal/pgogen -o default.pgo -d 25s
+
+# measure the effect of the shipped profile on the benchmark suite
+bench-pgo:
+	$(MAKE) -C benchmarks bench-pgo
 
 view-bench-cpu-result:
 	$(MAKE) -C benchmarks view-bench-cpu-result

@@ -1,4 +1,4 @@
-.PHONY: bench bench-x view-bench-cpu-result view-bench-mem-result clean-up
+.PHONY: bench bench-x bench-pgo view-bench-cpu-result view-bench-mem-result clean-up
 
 update-vendor:
 	go mod tidy
@@ -9,6 +9,13 @@ bench: update-vendor
 
 bench-x:
 	go test -bench=Mul --cpuprofile profile.out --memprofile memprofile.out -benchtime 10s
+
+# compare benchmarks built without and with the shipped PGO profile
+# (requires benchstat: go install golang.org/x/perf/cmd/benchstat@latest)
+bench-pgo:
+	go test -pgo=off -bench=. -benchtime 0.1s -count 6 | tee pgo-off.txt
+	go test -pgo=../default.pgo -bench=. -benchtime 0.1s -count 6 | tee pgo-on.txt
+	benchstat pgo-off.txt pgo-on.txt
 
 view-bench-cpu-result:
 	go tool pprof -http=":8000" profile.out

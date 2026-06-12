@@ -31,6 +31,9 @@ jobs:
     - name: Test
       run: go test -v ./...
 
+    - name: Test with PGO profile
+      run: go test -pgo=default.pgo .
+
     - name: Vet fuzz module
       working-directory: fuzz
       run: go vet ./...
