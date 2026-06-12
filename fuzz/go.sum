@@ -1,3 +1,5 @@
+github.com/AlexandrosKyriakakis/zerodecimal v0.0.0-20260612094624-487dcb7164a5 h1:8ae4U4gH6tjhrtYj62526xHMLHTjL1vUUmpuv8FVYVw=
+github.com/AlexandrosKyriakakis/zerodecimal v0.0.0-20260612094624-487dcb7164a5/go.mod h1:fv1t4t5b6lVfsnWDIRQalcNRRlU/uylSDpG/cVcaYRE=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
