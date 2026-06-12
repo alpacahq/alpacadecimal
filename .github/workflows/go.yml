@@ -13,12 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.18', '1.19']
+        # zerodecimal (the fallback engine) requires Go 1.26+
+        go-version: [ '1.26' ]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Setup Go ${{ matrix.go-version }}
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
         go-version: ${{ matrix.go-version }}
 
@@ -30,3 +31,22 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+    - name: Test with PGO profile
+      run: go test -pgo=default.pgo .
+
+    - name: Vet fuzz module
+      working-directory: fuzz
+      run: go vet ./...
+
+    - name: Fuzz seed corpus
+      working-directory: fuzz
+      run: go test ./...
+
+    - name: Vet benchmarks module
+      working-directory: benchmarks
+      run: go vet ./...
+
+    - name: Compile benchmarks
+      working-directory: benchmarks
+      run: go test -run=NONE ./...
