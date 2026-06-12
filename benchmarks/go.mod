@@ -6,8 +6,10 @@ toolchain go1.24.5
 
 require (
 	github.com/alpacahq/alpacadecimal v0.0.0
-	github.com/quagmt/udecimal v1.9.0
+	github.com/quagmt/udecimal v1.10.0
 	github.com/shopspring/decimal v1.4.0
 )
+
+require github.com/govalues/decimal v0.1.36
 
 replace github.com/alpacahq/alpacadecimal => ../

@@ -24,7 +24,8 @@ FUZZ_TARGETS = \
 	FuzzStringFormats \
 	FuzzSerialization \
 	FuzzNullDecimal \
-	FuzzScanTypes
+	FuzzScanTypes \
+	FuzzScan
 
 .PHONY: fuzz fuzz-seeds fuzz-all clean-corpus
 

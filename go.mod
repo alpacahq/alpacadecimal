@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.24.5
 
 require (
-	github.com/quagmt/udecimal v1.9.0
+	github.com/quagmt/udecimal v1.10.0
 	github.com/stretchr/testify v1.11.1
 )
 

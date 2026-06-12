@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"testing"
 
+	govalues "github.com/govalues/decimal"
 	"github.com/quagmt/udecimal"
 	"github.com/shopspring/decimal"
 
@@ -64,6 +65,15 @@ func BenchmarkNew(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = udecimal.MustFromInt64(123456789123, 3)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var result govalues.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.New(123456789123, 3)
 		}
 		_ = result
 	})
@@ -123,6 +133,15 @@ func BenchmarkNewFromString(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var result govalues.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.Parse("123456789.123456789")
+		}
+		_ = result
+	})
 }
 
 func BenchmarkNewFromFloat(b *testing.B) {
@@ -161,6 +180,15 @@ func BenchmarkNewFromFloat(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var result govalues.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.NewFromFloat64(123456789.123)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkNewFromFloat32(b *testing.B) {
@@ -196,6 +224,15 @@ func BenchmarkNewFromFloat32(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = udecimal.NewFromFloat64(float64(float32(123456789.0)))
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var result govalues.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.NewFromFloat64(float64(float32(123456789.0)))
 		}
 		_ = result
 	})
@@ -266,6 +303,15 @@ func BenchmarkNewFromInt(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var result govalues.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.New(123456789, 0)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkNewFromInt32(b *testing.B) {
@@ -301,6 +347,15 @@ func BenchmarkNewFromInt32(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = udecimal.MustFromInt64(123456789, 0)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var result govalues.Decimal
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.New(123456789, 0)
 		}
 		_ = result
 	})
@@ -429,6 +484,19 @@ func BenchmarkSum(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("223456789.123")
+		d3 := govalues.MustParse("323456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.Sum(d1, d2, d3)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkMin(b *testing.B) {
@@ -483,6 +551,19 @@ func BenchmarkMin(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("223456789.123")
+		d3 := govalues.MustParse("323456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Min(d2).Min(d3)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkMax(b *testing.B) {
@@ -534,6 +615,19 @@ func BenchmarkMax(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = udecimal.Max(d1, d2, d3)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("223456789.123")
+		d3 := govalues.MustParse("323456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Max(d2).Max(d3)
 		}
 		_ = result
 	})
@@ -596,6 +690,19 @@ func BenchmarkAvg(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("223456789.123")
+		d3 := govalues.MustParse("323456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = govalues.Mean(d1, d2, d3)
+		}
+		_ = result
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -650,6 +757,18 @@ func BenchmarkAdd(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("223456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d1.Add(d2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkSub(b *testing.B) {
@@ -697,6 +816,18 @@ func BenchmarkSub(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d1.Sub(d2)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("223456789.123")
+		d2 := govalues.MustParse("123456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d1.Sub(d2)
 		}
 		_ = result
 	})
@@ -750,6 +881,18 @@ func BenchmarkMul(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("3.14")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d1.Mul(d2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkDiv(b *testing.B) {
@@ -797,6 +940,18 @@ func BenchmarkDiv(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d1.Div(d2)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("3.0")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d1.Quo(d2)
 		}
 		_ = result
 	})
@@ -851,6 +1006,19 @@ func BenchmarkDivRound(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("7.0")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d1.Quo(d2)
+			result = result.Round(4)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkMod(b *testing.B) {
@@ -898,6 +1066,18 @@ func BenchmarkMod(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result, _ = d1.Mod(d2)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("7.0")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			_, result, _ = d1.QuoRem(d2)
 		}
 		_ = result
 	})
@@ -950,6 +1130,17 @@ func BenchmarkPow(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.PowInt(2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkQuoRem(b *testing.B) {
@@ -996,6 +1187,19 @@ func BenchmarkQuoRem(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
 		d2 := udecimal.MustParse("7.0")
 		var q, r udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			q, r, _ = d1.QuoRem(d2)
+		}
+		_ = q
+		_ = r
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("7.0")
+		var q, r govalues.Decimal
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
@@ -1085,6 +1289,17 @@ func BenchmarkNeg(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Neg()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkAbs(b *testing.B) {
@@ -1124,6 +1339,17 @@ func BenchmarkAbs(b *testing.B) {
 	b.Run("udecimal", func(b *testing.B) {
 		d := udecimal.MustParse("-123456789.123")
 		var result udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Abs()
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("-123456789.123")
+		var result govalues.Decimal
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
@@ -1197,6 +1423,18 @@ func BenchmarkCmp(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("22345678.1234")
+		var result int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Cmp(d2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkEqual(b *testing.B) {
@@ -1239,6 +1477,18 @@ func BenchmarkEqual(b *testing.B) {
 	b.Run("udecimal", func(b *testing.B) {
 		d1 := udecimal.MustParse("123456789.123")
 		d2 := udecimal.MustParse("123456789.1234")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Equal(d2)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("123456789.1234")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1397,6 +1647,18 @@ func BenchmarkLessThan(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1 := govalues.MustParse("123456789.123")
+		d2 := govalues.MustParse("223456789.1234")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d1.Less(d2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkLessThanOrEqual(b *testing.B) {
@@ -1497,6 +1759,17 @@ func BenchmarkSign(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("-123456789.123")
+		var result int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Sign()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkIsZero(b *testing.B) {
@@ -1535,6 +1808,17 @@ func BenchmarkIsZero(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d := udecimal.MustParse("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsZero()
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
 		var result bool
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -1589,6 +1873,17 @@ func BenchmarkIsPositive(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsPos()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkIsNegative(b *testing.B) {
@@ -1635,6 +1930,17 @@ func BenchmarkIsNegative(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("-123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsNeg()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkIsInteger(b *testing.B) {
@@ -1656,6 +1962,17 @@ func BenchmarkIsInteger(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.IsInteger()
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result bool
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.IsInt()
 		}
 		_ = result
 	})
@@ -1705,6 +2022,17 @@ func BenchmarkIntPart(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result int64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _, _ = d.Int64(0)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkNumDigits(b *testing.B) {
@@ -1740,6 +2068,17 @@ func BenchmarkNumDigits(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Prec()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkExponent(b *testing.B) {
@@ -1772,6 +2111,17 @@ func BenchmarkExponent(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.Exponent()
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result int
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Scale()
 		}
 		_ = result
 	})
@@ -1845,6 +2195,17 @@ func BenchmarkCoefficientInt64(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result uint64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Coef()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkFloat64(b *testing.B) {
@@ -1872,6 +2233,17 @@ func BenchmarkFloat64(b *testing.B) {
 
 	b.Run("shopspring", func(b *testing.B) {
 		d := decimal.RequireFromString("123456789.123")
+		var result float64
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.Float64()
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
 		var result float64
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -2105,6 +2477,17 @@ func BenchmarkRound(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("10000000.123456")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Round(2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkRoundBank(b *testing.B) {
@@ -2148,6 +2531,17 @@ func BenchmarkRoundBank(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.RoundBank(2)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("10000000.123456")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Round(2)
 		}
 		_ = result
 	})
@@ -2232,6 +2626,17 @@ func BenchmarkTruncate(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("10000000.123456")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Trunc(2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkCeil(b *testing.B) {
@@ -2278,6 +2683,17 @@ func BenchmarkCeil(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Ceil(0)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkFloor(b *testing.B) {
@@ -2321,6 +2737,17 @@ func BenchmarkFloor(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.Floor()
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Floor(0)
 		}
 		_ = result
 	})
@@ -2420,6 +2847,28 @@ func BenchmarkRoundUp(b *testing.B) {
 				result2 = d2.RoundHAZ(uint8(i))
 				result3 = d3.RoundHAZ(uint8(i))
 				result4 = d4.RoundHAZ(uint8(i))
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
+		_ = result4
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1, _ := govalues.NewFromFloat64(x1)
+		d2, _ := govalues.NewFromFloat64(x2)
+		d3, _ := govalues.NewFromFloat64(x3)
+		d4, _ := govalues.NewFromFloat64(x4)
+		var result1, result2, result3, result4 govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for i := -6; i <= 12; i++ {
+				result1 = d1.Ceil(i)
+				result2 = d2.Ceil(i)
+				result3 = d3.Ceil(i)
+				result4 = d4.Ceil(i)
 			}
 		}
 		_ = result1
@@ -2530,6 +2979,28 @@ func BenchmarkRoundDown(b *testing.B) {
 		_ = result3
 		_ = result4
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d1, _ := govalues.NewFromFloat64(x1)
+		d2, _ := govalues.NewFromFloat64(x2)
+		d3, _ := govalues.NewFromFloat64(x3)
+		d4, _ := govalues.NewFromFloat64(x4)
+		var result1, result2, result3, result4 govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			for i := -6; i <= 12; i++ {
+				result1 = d1.Trunc(i)
+				result2 = d2.Trunc(i)
+				result3 = d3.Trunc(i)
+				result4 = d4.Trunc(i)
+			}
+		}
+		_ = result1
+		_ = result2
+		_ = result3
+		_ = result4
+	})
 }
 
 func BenchmarkRoundCeil(b *testing.B) {
@@ -2565,6 +3036,17 @@ func BenchmarkRoundCeil(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("1.23456")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Ceil(2)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkRoundFloor(b *testing.B) {
@@ -2597,6 +3079,17 @@ func BenchmarkRoundFloor(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.RoundFloor(2)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("1.23456")
+		var result govalues.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Floor(2)
 		}
 		_ = result
 	})
@@ -2642,6 +3135,17 @@ func BenchmarkString(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		d := udecimal.MustParse("123456789.123")
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.String()
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
 		var result string
 		b.ResetTimer()
 		b.ReportAllocs()
@@ -2696,6 +3200,17 @@ func BenchmarkStringFixed(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("10000000.123456")
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Rescale(2).String()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkStringFixedBank(b *testing.B) {
@@ -2728,6 +3243,17 @@ func BenchmarkStringFixedBank(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			result = d.StringFixedBank(2)
+		}
+		_ = result
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("10000000.123456")
+		var result string
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result = d.Rescale(2).String()
 		}
 		_ = result
 	})
@@ -2827,6 +3353,17 @@ func BenchmarkValue(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result driver.Value
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.Value()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkScan(b *testing.B) {
@@ -2872,6 +3409,17 @@ func BenchmarkScan(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d udecimal.Decimal
+			err = d.Scan(large)
+		}
+		_ = err
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var err error
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d govalues.Decimal
 			err = d.Scan(large)
 		}
 		_ = err
@@ -2922,6 +3470,17 @@ func BenchmarkMarshalJSON(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = json.Marshal(d)
+		}
+		_ = result
+	})
 }
 
 func BenchmarkUnmarshalJSON(b *testing.B) {
@@ -2957,6 +3516,15 @@ func BenchmarkUnmarshalJSON(b *testing.B) {
 
 	b.Run("udecimal", func(b *testing.B) {
 		var d udecimal.Decimal
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			_ = json.Unmarshal(large, &d)
+		}
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		var d govalues.Decimal
 		b.ResetTimer()
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
@@ -3009,6 +3577,17 @@ func BenchmarkMarshalText(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.MarshalText()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkUnmarshalText(b *testing.B) {
@@ -3043,6 +3622,14 @@ func BenchmarkUnmarshalText(b *testing.B) {
 		b.ReportAllocs()
 		for n := 0; n < b.N; n++ {
 			var d udecimal.Decimal
+			_ = d.UnmarshalText(large)
+		}
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d govalues.Decimal
 			_ = d.UnmarshalText(large)
 		}
 	})
@@ -3092,6 +3679,17 @@ func BenchmarkMarshalBinary(b *testing.B) {
 		}
 		_ = result
 	})
+
+	b.Run("govalues", func(b *testing.B) {
+		d := govalues.MustParse("123456789.123")
+		var result []byte
+		b.ResetTimer()
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			result, _ = d.MarshalBinary()
+		}
+		_ = result
+	})
 }
 
 func BenchmarkUnmarshalBinary(b *testing.B) {
@@ -3099,6 +3697,7 @@ func BenchmarkUnmarshalBinary(b *testing.B) {
 	fbData, _ := alpacadecimal.RequireFromString("123456789.123").MarshalBinary()
 	ssData, _ := decimal.RequireFromString("123456789.123").MarshalBinary()
 	udData, _ := udecimal.MustParse("123456789.123").MarshalBinary()
+	gvData, _ := govalues.MustParse("123456789.123").MarshalBinary()
 
 	b.Run("alpacadecimal/optimized", func(b *testing.B) {
 		b.ReportAllocs()
@@ -3129,6 +3728,14 @@ func BenchmarkUnmarshalBinary(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			var d udecimal.Decimal
 			_ = d.UnmarshalBinary(udData)
+		}
+	})
+
+	b.Run("govalues", func(b *testing.B) {
+		b.ReportAllocs()
+		for n := 0; n < b.N; n++ {
+			var d govalues.Decimal
+			_ = d.UnmarshalBinary(gvData)
 		}
 	})
 }

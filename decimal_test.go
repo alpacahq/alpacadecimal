@@ -199,8 +199,16 @@ func TestDecimal(t *testing.T) {
 	})
 
 	t.Run("NewFromFloatWithExponent", func(t *testing.T) {
+		// rounds (half away from zero) at the requested exponent, like shopspring
 		x := alpacadecimal.NewFromFloatWithExponent(123.456, -2)
-		require.Equal(t, "123.45", x.String())
+		require.Equal(t, "123.46", x.String())
+
+		y := alpacadecimal.NewFromFloatWithExponent(123.454, -2)
+		require.Equal(t, "123.45", y.String())
+
+		// positive exponent rounds the integer part
+		z := alpacadecimal.NewFromFloatWithExponent(12345.0, 2)
+		require.Equal(t, "12300", z.String())
 	})
 
 	t.Run("NewFromFormattedString", func(t *testing.T) {
@@ -455,29 +463,30 @@ func TestDecimal(t *testing.T) {
 		require.True(t, exact)
 		require.Equal(t, float64(-2.25), f)
 
-		// Non-dyadic but short enough that FormatFloat round-trips cleanly
+		// Non-dyadic: not exactly representable in binary, so exact is false
+		// (same as shopspring, which uses big.Rat.Float64 semantics)
 		f, exact = alpacadecimal.RequireFromString("0.1").Float64()
-		require.True(t, exact)
+		require.False(t, exact)
 		require.InDelta(t, 0.1, f, 1e-15)
 
 		f, exact = alpacadecimal.RequireFromString("-0.1").Float64()
-		require.True(t, exact)
+		require.False(t, exact)
 		require.InDelta(t, -0.1, f, 1e-15)
 
 		f, exact = alpacadecimal.RequireFromString("0.3").Float64()
-		require.True(t, exact)
+		require.False(t, exact)
 		require.InDelta(t, 0.3, f, 1e-15)
 
 		f, exact = alpacadecimal.RequireFromString("1.1").Float64()
-		require.True(t, exact)
+		require.False(t, exact)
 		require.InDelta(t, 1.1, f, 1e-15)
 
 		f, exact = alpacadecimal.RequireFromString("-3.3").Float64()
-		require.True(t, exact)
+		require.False(t, exact)
 		require.InDelta(t, -3.3, f, 1e-15)
 
 		f, exact = alpacadecimal.RequireFromString("123.456").Float64()
-		require.True(t, exact)
+		require.False(t, exact)
 		require.InDelta(t, 123.456, f, 1e-12)
 
 		// Boundary: optimized/fallback edge
