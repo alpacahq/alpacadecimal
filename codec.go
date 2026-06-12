@@ -132,7 +132,15 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 	exp := int32(binary.BigEndian.Uint32(data[:4]))
 	payload := data[4:]
 	if len(payload) == 0 {
-		return fmt.Errorf("error decoding binary %v: Int.GobDecode: no data", data)
+		// big.Int.GobDecode treats an empty buffer as zero; shopspring's
+		// uninitialized Decimal{} marshals to exactly this shape
+		*d = Zero
+		return nil
+	}
+	if exp > maxSciExponent || exp < -maxSciExponent {
+		// the exponent is attacker-controlled wire data; materializing
+		// 10^exp eagerly must be bounded (same convention as parsing)
+		return fmt.Errorf("error decoding binary %v: exponent out of range", data)
 	}
 	version := payload[0] >> 1
 	if version != 1 {

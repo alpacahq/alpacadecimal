@@ -194,8 +194,9 @@ func (d Decimal) isIntegerSlow() bool {
 }
 
 // optimized:
-// Copy returns a copy of decimal with the same value and exponent, but a different pointer to value.
-// (Decimals are immutable, so the fallback pointer can be shared safely.)
+// Copy returns a copy of the decimal. Decimals are immutable, so unlike
+// shopspring no new backing storage is required and the receiver is returned
+// as-is.
 func (d Decimal) Copy() Decimal {
 	return d
 }

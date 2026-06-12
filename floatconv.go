@@ -1,6 +1,8 @@
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE-third-party file.
+// This file is vendored from the Go standard library's strconv package via
+// github.com/shopspring/decimal v1.4.0 (decimal-go.go). See LICENSE-third-party.
 
 // Multiprecision decimal numbers.
 // For floating-point formatting only; not general purpose.

@@ -696,3 +696,54 @@ func TestParityRepresentationInvariance(t *testing.T) {
 		require.True(t, r.IsOptimized())
 	})
 }
+
+func TestParityParseModes(t *testing.T) {
+	// restore defaults whatever happens
+	defer alpacadecimal.SetDefaultParseModeTrunc()
+
+	overflowing := "0.12345678901234567890123" // 23 fractional digits
+	sci := "1.23456789012345678901e-2"         // truncation via exponent shift
+
+	t.Run("trunc mode (default)", func(t *testing.T) {
+		alpacadecimal.SetDefaultParseModeTrunc()
+		d, err := alpacadecimal.NewFromString(overflowing)
+		require.NoError(t, err)
+		require.Equal(t, "0.1234567890123456789", d.String())
+
+		d, err = alpacadecimal.NewFromString(sci)
+		require.NoError(t, err)
+		require.Equal(t, "0.0123456789012345678", d.String())
+	})
+
+	t.Run("error mode", func(t *testing.T) {
+		alpacadecimal.SetDefaultParseModeError()
+		_, err := alpacadecimal.NewFromString(overflowing)
+		require.Error(t, err)
+		_, err = alpacadecimal.NewFromString(sci)
+		require.Error(t, err)
+
+		// exactly representable inputs still parse
+		d, err := alpacadecimal.NewFromString("0.1234567890123456789")
+		require.NoError(t, err)
+		require.Equal(t, "0.1234567890123456789", d.String())
+
+		// trailing zeros beyond 19 digits lose nothing and stay accepted
+		d, err = alpacadecimal.NewFromString("0.123456789012345678900000")
+		require.NoError(t, err)
+		require.Equal(t, "0.1234567890123456789", d.String())
+	})
+
+	t.Run("binary exponent guard", func(t *testing.T) {
+		// 4-byte exponent far out of range followed by a valid gob payload
+		data := []byte{0x00, 0x01, 0x00, 0x00, 0x02, 0x01} // exp 65536, coef 1
+		var d alpacadecimal.Decimal
+		require.Error(t, d.UnmarshalBinary(data))
+	})
+
+	t.Run("zero-value shopspring payload", func(t *testing.T) {
+		// shopspring's uninitialized Decimal{} marshals to a bare exponent
+		var d alpacadecimal.Decimal
+		require.NoError(t, d.UnmarshalBinary([]byte{0, 0, 0, 0}))
+		require.Equal(t, "0", d.String())
+	})
+}

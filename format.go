@@ -25,58 +25,8 @@ func (d Decimal) String() string {
 
 // formatFixed renders a fixed value, trimming trailing fractional zeros.
 func formatFixed(fixed int64) string {
-	// "-9223372.000000000000" => max length = 21 bytes
 	var s [21]byte
-	start := 7
-	end := 8
-
-	var ufixed uint64
-	if fixed >= 0 {
-		ufixed = uint64(fixed)
-	} else {
-		ufixed = uint64(-fixed)
-	}
-
-	integerPart := ufixed / scale
-	fractionalPart := ufixed % scale
-
-	// integer part
-	if integerPart == 0 {
-		s[start] = '0'
-	} else {
-		for integerPart >= 10 {
-			s[start] = byte(integerPart%10 + '0')
-			start--
-			integerPart /= 10
-		}
-		s[start] = byte(integerPart + '0')
-	}
-
-	// fractional part
-	if fractionalPart > 0 {
-		s[8] = '.'
-		for i := 20; i > 8; i-- {
-			is := fractionalPart % 10
-			fractionalPart /= 10
-			if is != 0 {
-				s[i] = byte(is + '0')
-				end = i + 1
-				for j := i - 1; j > 8; j-- {
-					s[j] = byte(fractionalPart%10 + '0')
-					fractionalPart /= 10
-				}
-				break
-			}
-		}
-	}
-
-	// sign part
-	if fixed < 0 {
-		start -= 1
-		s[start] = '-'
-	}
-
-	return string(s[start:end])
+	return string(formatFixedInto(&s, fixed))
 }
 
 // appendFixed appends the same rendering as formatFixed to b.
@@ -255,7 +205,7 @@ func (d Decimal) StringFixed(places int32) string {
 	return padStringToPlaces(rounded.String(), places)
 }
 
-// fallback:
+// optimized:
 // StringFixedBank returns a banker rounded fixed-point string with places digits
 // after the decimal point.
 func (d Decimal) StringFixedBank(places int32) string {
@@ -266,7 +216,7 @@ func (d Decimal) StringFixedBank(places int32) string {
 	return padStringToPlaces(rounded.String(), places)
 }
 
-// fallback:
+// optimized:
 // StringFixedCash returns a Swedish/Cash rounded fixed-point string. For
 // more details see the documentation at function RoundCash.
 func (d Decimal) StringFixedCash(interval uint8) string {
@@ -277,7 +227,7 @@ func (d Decimal) StringFixedCash(interval uint8) string {
 	return padStringToPlaces(rounded.String(), 2)
 }
 
-// fallback:
+// optimized:
 // StringScaled first scales the decimal (truncating, like shopspring's
 // internal rescale), then calls String() on it.
 //

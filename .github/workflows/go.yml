@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: [ '1.23', '1.24', '1.25' ]
+        go-version: [ '1.23', '1.24', '1.25', '1.26' ]
 
     steps:
     - uses: actions/checkout@v6
@@ -30,3 +30,19 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+    - name: Vet fuzz module
+      working-directory: fuzz
+      run: go vet ./...
+
+    - name: Fuzz seed corpus
+      working-directory: fuzz
+      run: go test ./...
+
+    - name: Vet benchmarks module
+      working-directory: benchmarks
+      run: go vet ./...
+
+    - name: Compile benchmarks
+      working-directory: benchmarks
+      run: go test -run=NONE ./...

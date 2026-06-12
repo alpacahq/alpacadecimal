@@ -32,7 +32,7 @@ We pick 12 fractional digits because it covers 99% of Alpaca's common cases.
 
 ### Compatibility
 
-`alpacadecimal.Decimal` is designed as a drop-in replacement for `decimal.Decimal`: same API surface (including package variables like `DivisionPrecision` and `PowPrecisionNegativeExponent`), same parsing acceptance (including scientific notation), the same rounding semantics in every mode and at any `places` value, the same `Pow` semantics (the fractional-exponent path is a digit-exact native port of shopspring's `Ln`/`ExpTaylor`), and a binary/gob wire format that is byte-compatible with shopspring's in both directions.
+`alpacadecimal.Decimal` is designed as a drop-in replacement for `decimal.Decimal`: the full API surface (including `Sin`/`Cos`/`Tan`/`Atan`, `Ln`, `ExpTaylor`, `ExpHullAbrham`, the `Pow` family, `RescalePair`, and package variables like `DivisionPrecision`, `PowPrecisionNegativeExponent` and `ExpMaxIterations`), the same parsing acceptance (including scientific notation), the same rounding semantics in every mode and at any `places` value, digit-exact native ports of shopspring's math (`Ln`/`ExpTaylor`/trig — verified value-identical against shopspring v1.4.0), and a binary/gob wire format that is byte-compatible with shopspring's in both directions.
 
 Verified by a fuzzing suite (`fuzz/`) that compares every operation against shopspring/decimal as the reference, plus a parity unit-test suite (`parity_test.go`) whose expected values were generated with shopspring v1.4.0.
 
@@ -55,7 +55,7 @@ require.Equal(t, int64(123), y.CoefficientInt64())
 require.Equal(t, 3, y.NumDigits())
 ```
 
-- Scientific-notation exponents are capped at ±10000 when parsing (a DoS guard: shopspring stores huge exponents lazily, we materialize them).
+- Scientific-notation exponents are capped at ±10000 when parsing, and binary (gob) exponents likewise (a DoS guard: shopspring stores huge exponents lazily, we materialize them). Programmatic construction (`New`, `Shift`) is capped at 10^100000 and panics with a clear message beyond it instead of pinning a CPU.
 - shopspring's accidental acceptance of a sign after a leading dot (`".-5"` parses as `-0.05` there) is deliberately not replicated; such input is rejected.
 
 ### Benchmarks

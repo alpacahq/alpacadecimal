@@ -202,7 +202,7 @@ func (d Decimal) RoundFloor(places int32) Decimal {
 	return roundBigGeneric(d, places, modeFloor)
 }
 
-// fallback:
+// optimized:
 // RoundCash aka Cash/Penny/öre rounding rounds decimal to a specific
 // interval. The amount payable for a cash transaction is rounded to the nearest
 // multiple of the minimum currency unit available. The following intervals are
@@ -332,7 +332,7 @@ func roundFixed(d Decimal, places int32, mode roundMode) Decimal {
 		if q <= maxIntInFixed/s && q >= minIntInFixed/s {
 			return Decimal{fixed: q * s}
 		}
-		return newFromInt64Exp(q, int64(-places))
+		return newFromInt64Exp(q, -int64(places))
 	}
 
 	// places <= -7: |d| < 10^7 <= 10^-places, so the result is 0 or ±10^-places.
@@ -360,9 +360,9 @@ func roundFixed(d Decimal, places int32, mode roundMode) Decimal {
 		return Zero
 	}
 	if x > 0 {
-		return newFromInt64Exp(1, int64(-places))
+		return newFromInt64Exp(1, -int64(places))
 	}
-	return newFromInt64Exp(-1, int64(-places))
+	return newFromInt64Exp(-1, -int64(places))
 }
 
 // roundFallbackU128 rounds a fallback value at negative places using a single
@@ -454,7 +454,7 @@ func roundBigGeneric(d Decimal, places int32, mode roundMode) Decimal {
 		}
 	}
 	coef, exp := d.toBigParts()
-	shift := int64(-places) - int64(exp) // digits to drop
+	shift := -int64(places) - int64(exp) // digits to drop
 	if shift <= 0 || coef.Sign() == 0 {
 		return d
 	}
@@ -495,5 +495,5 @@ func roundBigGeneric(d Decimal, places int32, mode roundMode) Decimal {
 			q.Sub(q, big.NewInt(1))
 		}
 	}
-	return decimalFromBigParts(q, int64(-places))
+	return decimalFromBigParts(q, -int64(places))
 }

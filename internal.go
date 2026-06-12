@@ -1,6 +1,7 @@
 package alpacadecimal
 
 import (
+	"fmt"
 	"math/big"
 	"math/bits"
 	"strings"
@@ -24,9 +25,8 @@ var pow10u = [20]uint64{
 	1e15, 1e16, 1e17, 1e18, 1e19,
 }
 
-// udecPow10[i] = 10^i as udecimal.Decimal, i in [0, 38].
-// 10^38 is the largest power of ten below udecimal's u128 coefficient limit.
-var udecPow10 = [39]udecimal.Decimal{}
+// udecPow10[i] = 10^i as udecimal.Decimal, i in [0, 19].
+var udecPow10 = [20]udecimal.Decimal{}
 
 func init() {
 	for i := range udecPow10 {
@@ -235,16 +235,27 @@ func decimalFromBigParts(coef *big.Int, exp int64) Decimal {
 	return NewFromUDecimal(udecFromBig(truncated, 19))
 }
 
+// maxMaterializedExp bounds eager materialization of 10^n coefficients
+// (Shift, New with huge exponents, decoding). shopspring stores exponents
+// lazily so it has no such limit; a 100k-digit coefficient (~42 KB,
+// microseconds to build) is far beyond any sane decimal while still
+// preventing a single call from pinning a CPU for minutes.
+const maxMaterializedExp = 100_000
+
 // bigPow10 returns 10^n as a big.Int for n >= 0.
 func bigPow10(n int64) *big.Int {
 	if n <= 18 {
 		return big.NewInt(pow10Table[n])
 	}
+	if n > maxMaterializedExp {
+		panic(fmt.Sprintf("alpacadecimal: exponent %d exceeds the supported materialization limit %d", n, maxMaterializedExp))
+	}
 	return new(big.Int).Exp(big.NewInt(10), big.NewInt(n), nil)
 }
 
 // newFromInt64Exp converts v * 10^exp into a Decimal for any exponent,
-// truncating digits beyond 19 fractional places. It never panics.
+// truncating digits beyond 19 fractional places. It panics only when exp
+// exceeds maxMaterializedExp.
 func newFromInt64Exp(v int64, exp int64) Decimal {
 	if v == 0 {
 		return Zero

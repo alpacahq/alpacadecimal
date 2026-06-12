@@ -193,7 +193,7 @@ func New(value int64, exp int32) Decimal {
 	return newFromInt64Exp(value, int64(exp))
 }
 
-// fallback:
+// optimized:
 // NewFromBigInt returns a new Decimal from a big.Int, value * 10 ^ exp
 func NewFromBigInt(value *big.Int, exp int32) Decimal {
 	if value.IsInt64() {
@@ -593,7 +593,7 @@ func (d Decimal) DivRound(d2 Decimal, precision int32) Decimal {
 	return divRoundBig(d, d2, precision)
 }
 
-// fallback:
+// optimized:
 // Mod returns d % d2.
 func (d Decimal) Mod(d2 Decimal) Decimal {
 	if d.fallback == nil && d2.fallback == nil {
@@ -618,7 +618,7 @@ func (d Decimal) Mod(d2 Decimal) Decimal {
 	return rr
 }
 
-// fallback:
+// optimized:
 // QuoRem does division with remainder
 // d.QuoRem(d2,precision) returns quotient q and remainder r such that
 //
@@ -682,7 +682,7 @@ func quoRemFallback(d, d2 Decimal, precision int32) (Decimal, Decimal, bool) {
 	return NewFromUDecimal(q), NewFromUDecimal(r), true
 }
 
-// fallback:
+// optimized:
 // Shift shifts the decimal in base 10. It shifts left when shift is positive
 // and right if shift is negative. In simpler terms, the given value for shift
 // is added to the exponent of the decimal.
@@ -1023,7 +1023,7 @@ func quoRemBig(d, d2 Decimal, precision int32) (Decimal, Decimal) {
 	dCoef, dExp := d.toBigParts()
 	d2Coef, d2Exp := d2.toBigParts()
 	q, r, scalerest := quoRemPartsRaw(dCoef, int64(dExp), d2Coef, int64(d2Exp), precision)
-	return decimalFromBigParts(q, int64(-precision)), decimalFromBigParts(r, scalerest)
+	return decimalFromBigParts(q, -int64(precision)), decimalFromBigParts(r, scalerest)
 }
 
 // quoRemPartsRaw computes q = trunc(a/b at precision) and the exact remainder
@@ -1032,7 +1032,7 @@ func quoRemPartsRaw(dCoef *big.Int, dExp int64, d2Coef *big.Int, d2Exp int64, pr
 	if d2Coef.Sign() == 0 {
 		panic("decimal division by 0")
 	}
-	scale := int64(-precision)
+	scale := -int64(precision)
 	e := dExp - d2Exp - scale
 	// d = a 10^ea, d2 = b 10^eb
 	var aa, bb big.Int
@@ -1057,7 +1057,7 @@ func divRoundParts(aCoef *big.Int, aExp int64, bCoef *big.Int, bExp int64, preci
 	if bCoef.Sign() == 0 {
 		panic("decimal division by 0")
 	}
-	scale := int64(-precision)
+	scale := -int64(precision)
 	e := aExp - bExp - scale
 	var aa, bb big.Int
 	if e < 0 {

@@ -4,7 +4,7 @@ import (
 	"math/big"
 )
 
-// fallback:
+// optimized:
 // Pow returns d to the power of d2, matching shopspring/decimal v1.4 semantics.
 // When the exponent is negative the result has a maximum precision of
 // PowPrecisionNegativeExponent places after the decimal point.
