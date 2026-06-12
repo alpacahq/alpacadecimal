@@ -61,86 +61,88 @@ require.Equal(t, 3, y.NumDigits())
 
 ### Benchmarks
 
-Run against shopspring/decimal v1.4.0, quagmt/udecimal v1.10.0 and govalues/decimal v0.1.36 on an Apple M1 Pro (`make bench`). "optimized" is the int64 fast path (the 99% case), "fallback" is the zerodecimal path. Bold marks the fastest library for the operation:
+Run against shopspring/decimal v1.4.0, quagmt/udecimal v1.10.0, AlexandrosKyriakakis/zerodecimal (the raw fallback engine, standalone) and govalues/decimal v0.1.36 on an Apple M1 Pro (`make bench`). "optimized" is the int64 fast path (the 99% case), "fallback" is the zerodecimal path. Bold marks the fastest library for the operation:
 
-| operation | alpacadecimal (optimized) | alpacadecimal (fallback) | shopspring | udecimal | govalues |
-|---|---|---|---|---|---|
-| Abs | **0.31 ns** | 13.02 ns | 28.50 ns | 2.03 ns | **0.31 ns** |
-| Add | **2.03 ns** | 18.02 ns | 39.91 ns | 4.41 ns | 5.29 ns |
-| Avg | **10.77 ns** | 74.09 ns | 288.65 ns | 31.02 ns | 45.55 ns |
-| BigFloat | **222.75 ns** | 256.55 ns | 348.25 ns | — | — |
-| BigInt | **26.98 ns** | 68.91 ns | 113.15 ns | — | — |
-| Ceil | **2.14 ns** | 19.58 ns | 139.00 ns | 5.68 ns | 2.80 ns |
-| Cmp | **2.03 ns** | 7.17 ns | 69.66 ns | 6.27 ns | 6.23 ns |
-| Coefficient | **26.76 ns** | 28.00 ns | 27.46 ns | — | — |
-| CoefficientInt64 | 2.09 ns | 2.03 ns | 0.39 ns | — | **0.31 ns** |
-| Copy | **0.31 ns** | 0.32 ns | 28.90 ns | — | — |
-| Div | **5.90 ns** | 36.58 ns | 189.05 ns | 14.14 ns | 32.53 ns |
-| DivRound | **7.18 ns** | 36.37 ns | 174.25 ns | 25.22 ns | 281.65 ns |
-| Equal | **2.03 ns** | 6.23 ns | 69.60 ns | 5.97 ns | 6.54 ns |
-| Exponent | **0.31 ns** | **0.31 ns** | **0.31 ns** | — | **0.31 ns** |
-| Float64 | **1.93 ns** | 215.85 ns | 233.25 ns | — | 48.27 ns |
-| Floor | **2.02 ns** | 19.48 ns | 116.65 ns | 4.98 ns | 2.80 ns |
-| GobDecode | **7.48 ns** | 20.92 ns | 32.91 ns | — | — |
-| GobEncode | **18.18 ns** | 21.61 ns | 30.22 ns | — | — |
-| GreaterThan | **2.03 ns** | 5.92 ns | 69.75 ns | 6.28 ns | — |
-| GreaterThanOrEqual | **2.03 ns** | 5.92 ns | 69.71 ns | 6.26 ns | — |
-| InexactFloat64 | **2.02 ns** | **2.03 ns** | 231.35 ns | 68.31 ns | — |
-| IntPart | **2.05 ns** | 4.05 ns | 113.30 ns | 6.23 ns | 3.74 ns |
-| IsInteger | **0.31 ns** | 2.50 ns | — | — | 0.78 ns |
-| IsNegative | **0.31 ns** | **0.31 ns** | **0.31 ns** | 2.02 ns | **0.31 ns** |
-| IsPositive | **0.31 ns** | **0.31 ns** | **0.31 ns** | 2.03 ns | **0.31 ns** |
-| IsZero | **0.31 ns** | **0.31 ns** | **0.31 ns** | 2.03 ns | **0.31 ns** |
-| LessThan | **2.03 ns** | 5.91 ns | 69.31 ns | 5.97 ns | 6.54 ns |
-| LessThanOrEqual | **2.03 ns** | 5.92 ns | 69.52 ns | 6.27 ns | — |
-| MarshalBinary | 18.12 ns | 21.71 ns | 30.06 ns | **17.34 ns** | 26.99 ns |
-| MarshalJSON | 181.70 ns | 205.45 ns | 316.70 ns | 193.75 ns | **171.90 ns** |
-| MarshalText | **26.49 ns** | 35.58 ns | 135.45 ns | 40.67 ns | **26.88 ns** |
-| Max | **5.25 ns** | 10.59 ns | 11.63 ns | 16.69 ns | 13.70 ns |
-| Min | **5.25 ns** | 10.59 ns | 11.68 ns | 16.62 ns | 13.39 ns |
-| Mod | **2.03 ns** | 16.04 ns | 131.40 ns | 14.89 ns | 9.03 ns |
-| Mul | **4.77 ns** | 19.29 ns | 40.79 ns | 5.97 ns | 5.31 ns |
-| Neg | **0.31 ns** | 13.16 ns | 27.04 ns | 2.04 ns | **0.31 ns** |
-| New | **2.09 ns** | 18.26 ns | 25.59 ns | 2.82 ns | 2.19 ns |
-| NewFromBigInt | **3.12 ns** | 19.46 ns | 26.98 ns | — | — |
-| NewFromFloat | **63.75 ns** | 115.15 ns | 373.15 ns | **63.37 ns** | 70.75 ns |
-| NewFromFloat32 | 184.30 ns | 175.70 ns | 183.30 ns | **54.28 ns** | **54.40 ns** |
-| NewFromFloatWithExponent | **143.75 ns** | 179.45 ns | 174.10 ns | — | — |
-| NewFromFormattedString | **127.30 ns** | 249.45 ns | 269.00 ns | — | — |
-| NewFromInt | **0.31 ns** | 12.78 ns | 25.10 ns | 2.76 ns | 2.18 ns |
-| NewFromInt32 | **0.31 ns** | 12.86 ns | 25.18 ns | 2.77 ns | 2.25 ns |
-| NewFromString | **6.58 ns** | 73.01 ns | 102.70 ns | 21.30 ns | 52.70 ns |
-| NumDigits | 2.50 ns | **2.26 ns** | 6.04 ns | — | 3.74 ns |
-| Pow | **16.98 ns** | 107.55 ns | 236.85 ns | 36.94 ns | 196.90 ns |
-| QuoRem | **5.37 ns** | 35.57 ns | 131.85 ns | 14.75 ns | 9.04 ns |
-| Rat | **117.65 ns** | 155.20 ns | — | — | — |
-| Round | **1.98 ns** | 18.61 ns | 150.20 ns | 5.30 ns | 2.81 ns |
-| RoundBank | **2.59 ns** | 19.52 ns | 454.40 ns | 5.30 ns | 2.80 ns |
-| RoundCash | **14.47 ns** | 97.63 ns | 537.55 ns | — | — |
-| RoundCeil | **2.04 ns** | 19.52 ns | 272.90 ns | — | 2.80 ns |
-| RoundDown | 177.05 ns | **145.10 ns** | 12123.50 ns | 303.10 ns | 163.65 ns |
-| RoundFloor | **1.96 ns** | 19.56 ns | 248.35 ns | — | 2.80 ns |
-| RoundUp | 177.60 ns | **82.33 ns** | 8305.50 ns | 230.05 ns | 178.45 ns |
-| Scan | **10.16 ns** | 72.33 ns | 115.70 ns | 21.81 ns | 50.61 ns |
-| Shift | **2.19 ns** | 50.75 ns | 27.68 ns | — | — |
-| Sign | **0.31 ns** | 0.47 ns | **0.31 ns** | 2.03 ns | **0.31 ns** |
-| String | **2.26 ns** | 22.93 ns | 122.95 ns | 38.27 ns | 25.50 ns |
-| StringFixed | **17.66 ns** | 45.79 ns | 276.35 ns | 52.08 ns | 25.59 ns |
-| StringFixedBank | **17.98 ns** | 47.02 ns | 565.95 ns | — | 25.60 ns |
-| StringFixedCash | **29.76 ns** | 148.75 ns | 663.60 ns | — | — |
-| Sub | **2.03 ns** | 19.52 ns | 33.11 ns | 6.59 ns | 6.23 ns |
-| Sum | **4.88 ns** | 37.35 ns | 81.64 ns | 20.62 ns | 24.02 ns |
-| Truncate | **2.05 ns** | 19.20 ns | 111.80 ns | 4.82 ns | 2.49 ns |
-| UnmarshalBinary | 7.48 ns | 20.81 ns | 32.43 ns | **2.49 ns** | 37.82 ns |
-| UnmarshalJSON | **104.40 ns** | 187.70 ns | 236.55 ns | 129.05 ns | 150.70 ns |
-| UnmarshalText | **10.59 ns** | 74.03 ns | 98.92 ns | 17.74 ns | 37.83 ns |
-| Value | 40.54 ns | **38.77 ns** | 135.80 ns | 53.86 ns | 40.35 ns |
+| operation | alpacadecimal (optimized) | alpacadecimal (fallback) | shopspring | udecimal | zerodecimal | govalues |
+|---|---|---|---|---|---|---|
+| Abs | **0.31 ns** | 12.96 ns | 28.21 ns | 2.03 ns | **0.31 ns** | **0.31 ns** |
+| Add | **2.03 ns** | 18.28 ns | 39.40 ns | 4.41 ns | **2.03 ns** | 5.29 ns |
+| Avg | **10.76 ns** | 74.83 ns | 290.50 ns | 30.79 ns | 16.84 ns | 47.80 ns |
+| BigFloat | **221.20 ns** | 256.55 ns | 347.45 ns | — | — | — |
+| BigInt | **26.72 ns** | 68.92 ns | 112.55 ns | — | — | — |
+| Ceil | **2.14 ns** | 19.56 ns | 139.35 ns | 5.73 ns | 4.52 ns | 2.90 ns |
+| Cmp | **2.03 ns** | 6.12 ns | 70.01 ns | 6.28 ns | 4.36 ns | 6.23 ns |
+| Coefficient | **26.84 ns** | 27.75 ns | 27.76 ns | — | — | — |
+| CoefficientInt64 | 2.03 ns | 2.10 ns | 0.41 ns | — | — | **0.31 ns** |
+| Copy | **0.31 ns** | **0.31 ns** | 27.34 ns | — | — | — |
+| Div | **5.87 ns** | 36.40 ns | 188.60 ns | 13.48 ns | 11.19 ns | 37.16 ns |
+| DivRound | **7.19 ns** | 36.35 ns | 171.45 ns | 22.42 ns | — | 289.55 ns |
+| Equal | **2.03 ns** | 6.23 ns | 69.93 ns | 5.99 ns | 4.71 ns | 6.55 ns |
+| Exponent | **0.31 ns** | **0.31 ns** | **0.31 ns** | — | — | **0.31 ns** |
+| Float64 | **1.93 ns** | 217.25 ns | 232.70 ns | — | — | 48.26 ns |
+| Floor | **2.05 ns** | 19.77 ns | 118.50 ns | 5.01 ns | 4.40 ns | 2.84 ns |
+| GobDecode | **7.49 ns** | 21.14 ns | 32.50 ns | — | — | — |
+| GobEncode | **17.82 ns** | 21.61 ns | 30.06 ns | — | — | — |
+| GreaterThan | **2.04 ns** | 5.93 ns | 70.78 ns | 6.28 ns | 4.36 ns | — |
+| GreaterThanOrEqual | **2.03 ns** | 5.92 ns | 70.01 ns | 6.24 ns | 4.37 ns | — |
+| InexactFloat64 | **2.03 ns** | **2.03 ns** | 232.45 ns | 68.45 ns | 43.73 ns | — |
+| IntPart | **2.05 ns** | 4.05 ns | 113.95 ns | 6.23 ns | 3.04 ns | 3.74 ns |
+| IsInteger | **0.31 ns** | 2.50 ns | — | — | — | 0.78 ns |
+| IsNegative | **0.31 ns** | **0.31 ns** | **0.32 ns** | 2.09 ns | **0.31 ns** | **0.31 ns** |
+| IsPositive | **0.31 ns** | **0.31 ns** | **0.31 ns** | 2.03 ns | **0.31 ns** | **0.31 ns** |
+| IsZero | **0.31 ns** | **0.31 ns** | **0.31 ns** | 2.03 ns | **0.31 ns** | **0.31 ns** |
+| LessThan | **2.04 ns** | 5.93 ns | 69.58 ns | 5.93 ns | 4.51 ns | 6.74 ns |
+| LessThanOrEqual | **2.03 ns** | 5.92 ns | 69.13 ns | 5.92 ns | 4.36 ns | — |
+| MarshalBinary | 17.83 ns | 21.66 ns | 29.88 ns | 17.31 ns | **11.71 ns** | 26.88 ns |
+| MarshalJSON | 181.10 ns | 204.05 ns | 307.90 ns | 194.15 ns | **173.00 ns** | 178.15 ns |
+| MarshalText | 26.38 ns | 35.63 ns | 124.80 ns | 40.55 ns | **23.84 ns** | 26.94 ns |
+| Max | **5.25 ns** | 10.59 ns | 12.21 ns | 16.69 ns | 8.72 ns | 13.71 ns |
+| Min | **5.28 ns** | 10.60 ns | 11.79 ns | 17.22 ns | 9.33 ns | 13.45 ns |
+| Mod | **2.04 ns** | 16.11 ns | 131.95 ns | 14.88 ns | 11.99 ns | 9.05 ns |
+| Mul | 4.91 ns | 19.16 ns | 40.36 ns | 5.95 ns | **2.04 ns** | 5.29 ns |
+| Neg | **0.31 ns** | 13.23 ns | 26.95 ns | 2.03 ns | **0.31 ns** | **0.31 ns** |
+| New | 2.11 ns | 18.58 ns | 25.57 ns | 2.82 ns | **1.88 ns** | 2.19 ns |
+| NewFromBigInt | **3.11 ns** | 19.94 ns | 27.15 ns | — | — | — |
+| NewFromFloat | 63.09 ns | 114.05 ns | 368.25 ns | 62.49 ns | **51.90 ns** | 70.20 ns |
+| NewFromFloat32 | 182.85 ns | 174.00 ns | 181.65 ns | 54.23 ns | **39.55 ns** | 54.45 ns |
+| NewFromFloatWithExponent | **146.75 ns** | 180.40 ns | 174.70 ns | — | — | — |
+| NewFromFormattedString | **129.45 ns** | 248.50 ns | 269.30 ns | — | — | — |
+| NewFromInt | **0.31 ns** | 12.89 ns | 26.14 ns | 2.82 ns | **0.31 ns** | 2.18 ns |
+| NewFromInt32 | **0.31 ns** | 12.84 ns | 25.03 ns | 2.77 ns | **0.31 ns** | 2.18 ns |
+| NewFromString | **6.78 ns** | 73.50 ns | 101.05 ns | 20.89 ns | 19.63 ns | 50.90 ns |
+| NumDigits | 2.51 ns | **2.27 ns** | 6.14 ns | — | — | 3.74 ns |
+| Pow | **17.18 ns** | 112.70 ns | 244.30 ns | 37.16 ns | — | 197.20 ns |
+| QuoRem | **5.37 ns** | 35.62 ns | 131.05 ns | 14.79 ns | 11.98 ns | 9.04 ns |
+| Rat | **118.20 ns** | 153.55 ns | — | — | — | — |
+| Round | **2.06 ns** | 19.33 ns | 151.80 ns | 5.30 ns | 4.05 ns | 3.12 ns |
+| RoundBank | **2.59 ns** | 19.51 ns | 456.10 ns | 5.30 ns | 4.36 ns | 2.83 ns |
+| RoundCash | **14.53 ns** | 99.36 ns | 545.25 ns | — | — | — |
+| RoundCeil | **2.05 ns** | 20.50 ns | 278.35 ns | — | 4.39 ns | 2.82 ns |
+| RoundDown | 192.50 ns | **145.55 ns** | 12432.50 ns | 306.85 ns | 167.90 ns | 164.70 ns |
+| RoundFloor | **2.00 ns** | 19.97 ns | 253.05 ns | — | 4.39 ns | 2.82 ns |
+| RoundUp | 178.90 ns | **84.22 ns** | 8447.00 ns | 231.40 ns | — | 179.80 ns |
+| Scan | **10.48 ns** | 72.32 ns | 114.35 ns | 21.84 ns | 20.05 ns | 50.57 ns |
+| Shift | **2.19 ns** | 51.36 ns | 28.20 ns | — | — | — |
+| Sign | **0.31 ns** | 0.47 ns | **0.31 ns** | 2.03 ns | **0.31 ns** | **0.31 ns** |
+| String | **2.27 ns** | 23.14 ns | 112.45 ns | 39.05 ns | 27.16 ns | 25.56 ns |
+| StringFixed | **17.96 ns** | 44.63 ns | 275.40 ns | 52.03 ns | 28.26 ns | 25.69 ns |
+| StringFixedBank | **18.10 ns** | 45.56 ns | 584.10 ns | — | 30.45 ns | 25.65 ns |
+| StringFixedCash | **29.83 ns** | 147.80 ns | 648.15 ns | — | — | — |
+| Sub | **2.04 ns** | 19.47 ns | 32.89 ns | 6.61 ns | 3.13 ns | 6.44 ns |
+| Sum | **4.88 ns** | 37.90 ns | 82.89 ns | 20.62 ns | 5.61 ns | 23.96 ns |
+| Truncate | **2.04 ns** | 19.31 ns | 112.15 ns | 4.83 ns | 4.05 ns | 2.49 ns |
+| UnmarshalBinary | 7.48 ns | 22.04 ns | 34.58 ns | 2.19 ns | **2.02 ns** | 37.83 ns |
+| UnmarshalJSON | **106.40 ns** | 188.85 ns | 240.35 ns | 128.55 ns | 127.30 ns | 147.10 ns |
+| UnmarshalText | **10.61 ns** | 74.55 ns | 99.06 ns | 17.77 ns | 15.89 ns | 37.83 ns |
+| Value | 40.73 ns | **38.79 ns** | 125.55 ns | 53.80 ns | 43.94 ns | 40.38 ns |
 
 Notes:
 - sub-nanosecond entries are fully inlined and partially dead-code-eliminated by the benchmark loop; treat them as "free".
 - `NewFromFloat32` deliberately uses shopspring's exact shortest-representation algorithm (which differs from strconv's in rare 1-ulp cases), trading speed for digit parity.
 - `UnmarshalBinary`/`GobDecode` pay for decoding shopspring's wire format, which udecimal's own format-specific decoder doesn't.
 - requires Go 1.26+ (the zerodecimal engine's floor).
+- the `zerodecimal` column is the raw fallback engine used standalone, on the same fallback-range inputs as the other competitor columns. Against it, alpacadecimal's optimized path is **-33% geomean** (the int64 representation is the point of this library), while the fallback path costs **+181% geomean** — the price of boxing the engine value behind a pointer (one 24 B allocation per result) plus shopspring semantics (`DivisionPrecision` rounding, shopspring wire formats). If your values routinely exceed the fixed range and you don't need shopspring compatibility, raw zerodecimal is the better tool; if 99% fit (the Alpaca case), alpacadecimal is faster where it counts.
+- zerodecimal's `MarshalBinary`/`UnmarshalBinary` use its own compact wire format (like udecimal's), not shopspring's; its StringFixedBank row is emulated as `RoundBank(2).StringFixed(2)`.
 - govalues clamps negative rounding scales to zero, so `RoundUp`/`RoundDown` loops are not fully comparable.
 
 ### Profile-guided optimization (PGO)
