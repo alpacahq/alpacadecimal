@@ -3,7 +3,7 @@ module github.com/alpacahq/alpacadecimal
 go 1.18
 
 require (
-	github.com/shopspring/decimal v1.4.0
+	github.com/shopspring/decimal v1.4.1-0.20260629095829-3090cc487feb
 	github.com/stretchr/testify v1.10.0
 )
 
