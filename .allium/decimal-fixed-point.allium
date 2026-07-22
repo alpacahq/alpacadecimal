@@ -11,17 +11,16 @@
 ------------------------------------------------------------
 
 value Decimal {
-    -- An exact decimal number for financial arithmetic.
+    -- An exact decimal number for financial arithmetic, representing
+    -- coefficient * 10 ^ exponent.
     -- Two Decimals with the same numeric value are equal regardless
-    -- of construction path.
+    -- of construction path: equality is by numeric value, not by
+    -- structural comparison of coefficient and exponent fields
+    -- (formalised by ComparisonOperations.OrderConsistency).
+    -- There is no canonical normal form; in particular zero carries
+    -- no distinguished exponent.
     coefficient: Integer
     exponent: Integer
-
-    invariant NumericEquality {
-        -- equality is by numeric value, not by structural comparison of
-        -- coefficient and exponent fields
-        coefficient = 0 implies exponent = 0
-    }
 }
 
 value NullDecimal {
@@ -44,6 +43,8 @@ contract ArithmeticOperations {
         -- Results are numerically exact for values within the supported
         -- precision range. Non-terminating division produces a result
         -- with at most config.division_precision fractional digits.
+        -- divide requires a non-zero divisor; a zero divisor is outside
+        -- this contract.
 
     @invariant Commutativity
         -- add(a, b) = add(b, a) and multiply(a, b) = multiply(b, a).
@@ -113,7 +114,13 @@ enum RoundingMode { half_up | half_even | toward_zero | away_from_zero | toward_
 ------------------------------------------------------------
 
 config {
+    -- Fractional digits carried exactly by the library's native
+    -- representation; defines the supported precision range referred
+    -- to by ExactArithmetic, PrecisionPreservation and
+    -- TransparentFallback.
     fractional_precision: Integer = 12
+    -- Fractional digits retained when division does not terminate
+    -- (see ExactArithmetic).
     division_precision: Integer = 16
 }
 
@@ -134,9 +141,11 @@ surface DecimalLibrary {
         -- the supported precision range; no result silently loses precision.
 
     @guarantee TransparentFallback
-        -- Values outside the supported precision range are handled
-        -- automatically with no observable change in numeric behaviour
-        -- from the caller's perspective.
+        -- The supported precision range is values with at most
+        -- config.fractional_precision fractional digits, up to the
+        -- library's fixed integer capacity. Values outside that range
+        -- are handled automatically with no observable change in
+        -- numeric behaviour from the caller's perspective.
 
     @guarantee NullDecimalCompatibility
         -- An absent NullDecimal serialises to a null representation in
