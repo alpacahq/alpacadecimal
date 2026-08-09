@@ -107,6 +107,8 @@ contract NullDecimalSerialization {
 -- Enumerations
 ------------------------------------------------------------
 
+-- half_up resolves ties by rounding away from zero (e.g. -1.5 rounds
+-- to -2 at zero places), matching the implementation's default Round.
 enum RoundingMode { half_up | half_even | toward_zero | away_from_zero | toward_positive_infinity | toward_negative_infinity }
 
 ------------------------------------------------------------
