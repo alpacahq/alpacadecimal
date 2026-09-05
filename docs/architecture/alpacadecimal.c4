@@ -1,0 +1,74 @@
+// docs/architecture/alpacadecimal.c4 — LikeC4 model for alpacahq/alpacadecimal (container level)
+// generated_by: claude-fable-5 / layered-docs 2026-09
+// source_commit: 7ce95bc0f8b064aa0b9b81a4cdf8ef2300fde341   source_branch: docs/layered-2026-09   generated_at: 2026-09-05T11:35:41Z
+// confidence: high   review_status: draft-needs-review
+model {
+  alpacadecimal = system 'alpacadecimal' {
+    #generated
+    description '
+      Go library: a Decimal type compatible with shopspring/decimal but optimised for Alpaca data sets
+      (int64 fixed-point with 12 decimal places, falling back to shopspring/decimal on overflow).
+      Consumed as a Go module by downstream Go services. Evidence: README.md, go.mod
+    '
+    technology 'Go 1.18+ (library, no runtime process)'
+    link https://github.com/alpacahq/alpacadecimal 'Repository'
+    metadata {
+      okf 'docs/okf/system.md'
+      allium 'none: no accepted spec'
+      evidence 'README.md, go.mod, decimal.go, Makefile, .github/workflows/go.yml'
+    }
+
+    lib = container 'alpacadecimal Go package' {
+      #generated #entrypoint
+      description '
+        Package github.com/alpacahq/alpacadecimal: Decimal struct (fixed int64 + optional shopspring fallback)
+        with arithmetic, rounding/truncation, String, JSON/Text/Binary/Gob marshalling and database/sql
+        driver.Valuer / sql.Scanner support. Evidence: decimal.go, go.mod
+      '
+      technology 'Go; depends on github.com/shopspring/decimal v1.4.0'
+      metadata {
+        okf 'docs/okf/system.md'
+        allium 'none: no accepted spec'
+        evidence 'decimal.go, decimal_test.go, go.mod'
+      }
+    }
+
+    benchmarks = container 'Benchmark suite' {
+      #generated #internal
+      description '
+        Separate Go module (benchmarks/) comparing alpacadecimal against shopspring/decimal, ericlagergren/decimal
+        and quagmt/udecimal; produces cpu/mem pprof profiles via make bench. Not shipped to consumers.
+        Evidence: benchmarks/go.mod, benchmarks/Makefile, benchmarks/benchmark_test.go
+      '
+      technology 'Go 1.23 test binary (go test -bench)'
+      metadata {
+        okf 'docs/okf/system.md'
+        allium 'none: no accepted spec'
+        evidence 'benchmarks/go.mod, benchmarks/Makefile, benchmarks/benchmark_test.go'
+      }
+    }
+
+    benchmarks -[uses]-> lib 'benchmarks the package via replace directive (benchmarks/go.mod)'
+  }
+
+  go_service_developer = person 'Downstream Go service developer' {
+    description '
+      Engineer of an Alpaca Go service that imports alpacadecimal as a drop-in replacement for shopspring decimal.
+      Evidence: README.md (Goal: drop-in replacement), commit 7ce95bc (a downstream service hit a Truncate panic)
+    '
+  }
+  go_service_developer -[uses]-> alpacadecimal.lib 'imports the Go module (go get github.com/alpacahq/alpacadecimal)'
+}
+
+views {
+  view alpacadecimal_context {
+    title 'alpacadecimal — context'
+    include alpacadecimal, go_service_developer
+    autoLayout TopBottom
+  }
+  view alpacadecimal_containers of alpacadecimal {
+    title 'alpacadecimal — containers'
+    include *
+    autoLayout LeftRight
+  }
+}
