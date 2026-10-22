@@ -2,7 +2,7 @@ module github.com/alpacahq/alpacadecimal/benchmarks
 
 go 1.23
 
-toolchain go1.24.5
+toolchain go1.26.10
 
 require (
 	github.com/alpacahq/alpacadecimal v0.0.8
